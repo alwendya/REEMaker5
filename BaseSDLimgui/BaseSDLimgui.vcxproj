@@ -80,11 +80,13 @@
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);libs</LibraryPath>
+    <TargetName>REEMAKER</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);libs</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
+    <TargetName>REEMAKER</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -175,6 +177,13 @@
     <ClInclude Include="Header__ImGUI_addon.h" />
     <ClInclude Include="Header__WinToast.h" />
     <ClInclude Include="Header_Main.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="BaseSDLimgui.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Designcontest-Vintage-Stamp.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

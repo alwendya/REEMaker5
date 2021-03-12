@@ -95,7 +95,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminBASE = path;
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of(L"\\") + 1);
 
-	CheminFont = CheminBASE + L"REEMAKER.ttf";
+	CheminFont = CheminBASE + L"REEMAKER.ttf";//J'utilise Droid Sans pour des histoires de droits
 	CheminPDFTK = CheminBASE + L"pdftk.exe";
 
 
@@ -440,8 +440,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					{
 						ImGui::Separator();
 						ImGui::PushFont(MYFont14bold);
-						ImGui::Text(u8"Choix et réglage des tranches :");
-						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Choix et réglage des tranches :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
+						ImGui::Text(u8"Choix des tranches et réglages des cycles :");
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(
+							u8"Choix des tranches et réglages des cycles :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
 						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez cocher les tranches applicables au REE et saisir le code projet.\nLe code projet est sous la forme XYYZZ avec :\nX = Le type de Cycle\nYY = L'année du cycle\nZZ = L'index du cycle"); ImGui::Text("");
 						if (ImGui::BeginTable("##tableTranche", 3, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 250.0f)))
@@ -648,7 +649,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										pDlg->SetOkButtonLabel(L"&Sauvegarder");
 										wstring CustomCheminPDF = wCheminPDF;
 										CustomCheminPDF = CustomCheminPDF.substr(0, CustomCheminPDF.length() - 4);
-										CustomCheminPDF += L"_foliotée.pdf";
+										CustomCheminPDF += L"_foliotée";
 										pDlg->SetFileName(CustomCheminPDF.c_str());
 										pDlg->SetDefaultExtension(L"pdf");
 										hr = pDlg->Show(NULL);
@@ -703,21 +704,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 												//    \-----------s2-60-----------------------/
 												//                                                150
 												//*/
-												double TamponLargeur = 150.0;
-												double TamponHauteur = 60.0;
-												double TamponMargH = 7.0;
-												double TamponMargL = 4.0;
-												double TamponH1 = 20.0;
-												double TamponH2 = 40.0;
-												double TamponS1 = 100.0;
-												double TamponS2 = 60.0;
-												double TamponEpaisseur = 1.0;
-												double TamponPolice = 8;
 
-												double MargePage = 20.0;
 
-												double PosX = 0.0;
-												double PosY = 0.0;
+
+												constexpr double TamponLargeur = 150.0;
+												constexpr double TamponHauteur = 60.0;
+												constexpr double TamponMargH = 7.0;
+												constexpr double TamponMargL = 4.0;
+												constexpr double TamponH1 = 20.0;
+												constexpr double TamponH2 = 40.0;
+												constexpr double TamponS1 = 100.0;
+												constexpr double TamponS2 = 60.0;
+												constexpr double TamponEpaisseur = 1.0;
+												constexpr double TamponPolice = 8;
+
 												PDFError exPDFError;
 
 
@@ -730,7 +730,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 												{
 													if (TrancheSelect[t] == false)
 														continue;
-
 
 													try
 													{
@@ -810,16 +809,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 																painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
 																PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
-																PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
+																PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. : " + to_string(t)).c_str()));
 																PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
-																PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
-																PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
-																PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(to_string(t) + string(TrancheCode[t])).c_str()));
+																PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. : " + string(strINDICEREE)).c_str()));
+																PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio : " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
+																PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle : " + to_string(t) + string(TrancheCode[t])).c_str()));
 
 																painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-																painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Center);//OK
-																painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Center);//OK
-																painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Center);//OK
+																painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+																painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+																painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
 																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
 																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
 																painter.FinishPage();
@@ -841,8 +840,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																*  0,0
 																*/
 
-																//margeEmplacementTamponX;
-																//margeEmplacementTamponY;
 																if (radioEmplacementTampon == 0)
 																{//Haut Gauche
 																	rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
@@ -1325,6 +1322,10 @@ Programme sous licence GPL 2
 ## Les polices suivantes sont utilisées :
   * [Droid Sans par Steve Matteson](https://en.wikipedia.org/wiki/Steve_Matteson)
     [Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
+
+## Les icones suivants sont utilisés :
+  * [Stamp Icon par DesignContest](http://www.designcontest.com/)
+    [Licence 'CC Attribution 4.0'](https://creativecommons.org/licenses/by/4.0/).
 )";
 					static ImGui::MarkdownConfig mdConfig;
 					mdConfig.linkCallback = [](ImGui::MarkdownLinkCallbackData data_)
