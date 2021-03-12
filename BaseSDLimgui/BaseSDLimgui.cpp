@@ -10268,6 +10268,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																//  image.LoadFromJpeg("C:\\PODOFO Build\\image.jpg");
 																//  painter.DrawImage(0.0, 0.0, &image);
 
+
+
 																painter.SetStrokeWidth(TamponEpaisseur);
 																//Fond du tampon en blanc avec bord de couleur rouge
 																painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
