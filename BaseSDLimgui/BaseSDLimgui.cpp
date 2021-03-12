@@ -9504,8 +9504,8 @@ static bool tabFolioter = true;
 static bool tabPageDeGarde = true;
 static bool tabParametre = true;
 static int radioTotalPartiel = 0;
-/*  0=HautGauche 1=HautDroite 2=BasGauche 3=BasDroite*/
-static int radioEmplacementTampon = 0;
+/*  0=HautGauche 1=HautDroite(DEFAUT) 2=BasGauche 3=BasDroite*/
+static int radioEmplacementTampon = 1;
 static ImU16 margeEmplacementTamponX = 20;
 static ImU16 margeEmplacementTamponY = 20;
 static const ImU16   u16_one = 1, u16_fast = 10;//Réglage du Scalar
@@ -9589,7 +9589,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-	SDL_Window* window = SDL_CreateWindow("Dear ImGui SDL2+OpenGL example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+	SDL_Window* window = SDL_CreateWindow("REEMaker 5 - A new hope", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_MakeCurrent(window, gl_context);
 	SDL_GL_SetSwapInterval(1); // Enable vsync
@@ -10212,30 +10212,58 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 													try
 													{
 														wstring TEMPTampon = filesystem::temp_directory_path().wstring() + generate(16) + L"_tr" + to_wstring(t) + L".pdf";
-														PoDoFo::PdfStreamedDocument document(TEMPTampon.c_str());
-														PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", false, false, true, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, ConvertWideToANSI(CheminFont).c_str());
-														pFont->SetFontSize(TamponPolice);
-														size_t mStarting = 0;
-														size_t mEnding = vecMediaBox.size();
+														{
+															PoDoFo::PdfStreamedDocument document(TEMPTampon.c_str());
+															PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", false, false, true, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, ConvertWideToANSI(CheminFont).c_str());
+															pFont->SetFontSize(TamponPolice);
+															size_t mStarting = 0;
+															size_t mEnding = vecMediaBox.size();
 
-														if (radioTotalPartiel == 1)//Partiel
-														{
-															mStarting = u16_PageDebut - 1;
-															mEnding = u16_PageFin;
-														}
-														for (size_t i = mStarting; i < mEnding; i++)
-														{
-															MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, vecMediaBox.size());
-															MessagePercentOPENCours = fmt::format("Tr.{}", t);
+															if (radioTotalPartiel == 1)//Partiel
 															{
+																mStarting = u16_PageDebut - 1;
+																mEnding = u16_PageFin;
+															}
+
+															for (size_t i = mStarting; i < mEnding; i++)
+															{
+																MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, vecMediaBox.size());
+																MessagePercentOPENCours = fmt::format("Tr.{}", t);
 																PoDoFo::PdfPage* pPage = document.CreatePage(vecMediaBox[i]);
 
 																pPage->SetRotation(vecRotation[i]);
 																PoDoFo::PdfPainter painter;
 																PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
-																PoDoFo::PdfXObject xObj(rect, &document);
 
+																if (vecRotation[i] == 90)
+																	rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+																else if (vecRotation[i] == 270)
+																	rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+
+																PoDoFo::PdfXObject xObj(rect, &document);
 																painter.SetPage(&xObj);
+																/*
+																* Matrix work
+																* SetTransformationMatrix(a, b, c, d, e, f)
+																* double a, b, c, d, e, f;
+																* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
+																* a = cos (alpha);					  0				  -1				 0
+																* b = sin (alpha);					  1				   0			    -1
+																* c = -sin(alpha);					 -1				   0			     1
+																* d = cos (alpha);					  0				  -1			     0
+																* e = coord X Rotation 	     ValHauteur       ValLargeur                 0	
+																* f = coord Y Rotation			      0       ValHauteur        ValLargeur						
+																* 
+																* e et f = point de rotation
+																* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
+																*/
+																if (vecRotation[i] == 90)
+																	painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
+																else if (vecRotation[i] == 180)
+																	painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
+																else if (vecRotation[i] == 270)
+																	painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
+
 																//  PdfImage image(&document);//Logo EDF PDG ?
 																//  image.LoadFromJpeg("C:\\PODOFO Build\\image.jpg");
 																//  painter.DrawImage(0.0, 0.0, &image);
@@ -10271,6 +10299,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
 																painter.FinishPage();
 
+
 																/*
 																* Affinage du Rect
 																*   0,vecHeight
@@ -10293,22 +10322,96 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																{//Haut Gauche
 																	rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
 																	rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	if (vecRotation[i] == 0)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 90)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+																		rect.SetBottom((double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 180)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 270)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+																	}
+
 																}
 																else if (radioEmplacementTampon == 1)
 																{//Haut Droite
-																	rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																	rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	if (vecRotation[i] == 0)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 90)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+																	}
+																	else if (vecRotation[i] == 180)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 270)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+																	}
 																}
 																else if (radioEmplacementTampon == 2)
 																{//Bas Gauche
-																	//On rajoute juste les marges
-																	rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																	rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	if (vecRotation[i] == 0)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 90)
+																	{//A Voir
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+																	}
+																	else if (vecRotation[i] == 180)
+																	{//A Voir
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 270)
+																	{//A voir
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+																	}
 																}
 																else if (radioEmplacementTampon == 3)
 																{//Bas Droite
-																	rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																	rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	if (vecRotation[i] == 0)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 90)
+																	{
+																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+																	}
+																	else if (vecRotation[i] == 180)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+																	}
+																	else if (vecRotation[i] == 270)
+																	{
+																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+																	}
 																}
 
 																PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
@@ -10318,9 +10421,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 
 																painter.FinishPage();
-															}
 
-															MessageOPENCours = fmt::format(u8"Création des tampons {}\n\Sauvegarde du fichier PDF temporaire", string(txtSpinner));
+															}
+															MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF temporaire", string(txtSpinner));
 															MessagePercentOPENCours = fmt::format("Tr.{}", t);
 															document.GetInfo()->SetCreator(PoDoFo::PdfString("REEMaker 5"));
 															document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
@@ -10328,8 +10431,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 															document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
 															document.Close();
 														}
-
-														MessageOPENCours = fmt::format(u8"Création des tampons {}\n\Fusion du fichier PDF temporaire avec la procédure", string(txtSpinner));
+														MessageOPENCours = fmt::format(u8"Création des tampons {}\nFusion du fichier PDF temporaire avec la procédure", string(txtSpinner));
 														MessagePercentOPENCours = fmt::format("Tr.{}", t);
 														wstring localwCheminPDF = wCheminPDF;
 
