@@ -26,8 +26,49 @@ LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-MAINICON               ICON                    "Designcontest-Vintage-Stamp.ico"
-SMALLICO			   ICON                    "Designcontest-Vintage-Stamp-64only.ico"
+MAINICON                ICON                    "Designcontest-Vintage-Stamp.ico"
+
+SMALLICO                ICON                    "Designcontest-Vintage-Stamp-64only.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 5,1,0,0
+ PRODUCTVERSION 5,1,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040c04b0"
+        BEGIN
+            VALUE "CompanyName", "Grégory WENTZEL"
+            VALUE "FileDescription", "REEMaker"
+            VALUE "FileVersion", "5.1.0.0"
+            VALUE "InternalName", "REEMaker.exe"
+            VALUE "LegalCopyright", "Copyright (C) 2021"
+            VALUE "OriginalFilename", "REEMaker.exe"
+            VALUE "ProductName", "REEMaker"
+            VALUE "ProductVersion", "5.1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x40c, 1200
+    END
+END
+
 #endif    // Français (France) resources
 /////////////////////////////////////////////////////////////////////////////
 

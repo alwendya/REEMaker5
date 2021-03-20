@@ -5,13 +5,14 @@
 #include "Header__CryptoZstd.h"
 #include "Header__WinToast.h"
 using namespace std;
-
+#define EPR
 /*
 * Prototype
 */
 bool SauveParametres();
 bool ChargeParametres();
 wstring generate(int max_length);
+string sgenerate(int max_length);
 
 
 class PDFError :public exception
@@ -43,12 +44,19 @@ ImVec4 clear_color = IMVEC4_COL16(115, 135, 150, 255);
 
 static std::string MessageOPENCours("Analyse du document en cours");
 static std::string MessagePercentOPENCours("12 %");
+static wstring CheminPDG(L"");
 static wstring CheminBASE(L"");
 static wstring CheminFont(L"");
 static wstring CheminPDFTK(L"");
 static wstring FichierPDFsortie(L"");
 static vector<PoDoFo::PdfRect> vecMediaBox;
 static vector<int> vecRotation;
+static vector<string> ListePDGModele;
+static vector<wstring> PDGouvert;
+static string pdgClassSEED = "";
+static char PDGouvertChar[9999][1024];
+static bool PDGouvertBool[9999];
+static int item_current_vPDG = 0;
 static char  txtSpinner[2] = "\0";
 static char NomSite[32];
 static char TrancheCode[10][6];
@@ -95,9 +103,50 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminBASE = path;
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of(L"\\") + 1);
 
+	CheminPDG = CheminBASE + L"PDG_modele\\";
 	CheminFont = CheminBASE + L"REEMAKER.ttf";//J'utilise Droid Sans pour des histoires de droits
 	CheminPDFTK = CheminBASE + L"pdftk.exe";
 
+	ListePDGModele.clear();
+	pdgClassSEED = sgenerate(12);
+#ifndef EPR
+	item_current_vPDG = 0;
+	for (const auto& p : filesystem::directory_iterator(CheminPDG))
+	{
+		string pPathExtension = p.path().extension().string();
+		transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+		string pPathFileName = p.path().filename().string();
+		transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+		if (pPathExtension == ".txt")
+			if (pPathFileName == "pââge de garde standard.txt")
+				ListePDGModele.insert(ListePDGModele.begin() + 0, p.path().filename().u8string());
+			else
+				ListePDGModele.push_back(p.path().filename().u8string());
+	}
+
+	if (ListePDGModele.size() == 0)
+	{
+		//TODO : Aucun fichier, on le recrée ... 
+	}
+
+	PDGouvert.clear();
+	for (size_t i = 0; i < 9999; i++)
+		PDGouvertChar[i][0] = '\0';
+	for (size_t i = 0; i < 9999; i++)
+		PDGouvertBool[i] = false;
+	{
+		//Ouverture du fichier pour lecture
+		wstring CheminPDGModele = CheminPDG + ConvertUtf8ToWide(ListePDGModele[0]);
+		wifstream input_file(CheminPDGModele);
+		wstring line;
+		while (getline(input_file, line)) {
+			if (line.size() > 2)
+				if (line.substr(0,2) != L"::")
+					PDGouvert.push_back(line);
+		}
+		input_file.close();
+	}
+#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
 	{
@@ -112,7 +161,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+#ifdef EPR
+	SDL_Window* window = SDL_CreateWindow("REEMaker 5 - A new hope - EPR MODE", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+#else
 	SDL_Window* window = SDL_CreateWindow("REEMaker 5 - A new hope", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+#endif
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_MakeCurrent(window, gl_context);
 	SDL_GL_SetSwapInterval(1); // Enable vsync
@@ -447,6 +500,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez cocher les tranches applicables au REE et saisir le code projet.\nLe code projet est sous la forme XYYZZ avec :\nX = Le type de Cycle\nYY = L'année du cycle\nZZ = L'index du cycle"); ImGui::Text("");
 						if (ImGui::BeginTable("##tableTranche", 3, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 250.0f)))
 						{
+#ifndef EPR
 							ImGui::TableNextRow();
 							ImGui::TableSetColumnIndex(0);
 							ImGui::Text("Tranche 1");
@@ -495,6 +549,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							else
 								ImGui::InputTextWithHint("##CycleTranche9", "ex. C2015", TrancheCode[9], IM_ARRAYSIZE(TrancheCode[9]), ImGuiInputTextFlags_ReadOnly);
 							ImGui::Text("");
+#endif
 
 							ImGui::TableNextRow();
 							ImGui::TableSetColumnIndex(0);
@@ -502,6 +557,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 							ImGui::Checkbox("##Tranche3", &TrancheSelect[3]);
 							ImGui::PopStyleVar();
+#ifndef EPR
 							ImGui::SameLine();
 							if (TrancheSelect[3])
 							{
@@ -511,8 +567,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							}
 							else
 								ImGui::InputTextWithHint("##CycleTranche3", "ex. C2015", TrancheCode[3], IM_ARRAYSIZE(TrancheCode[3]), ImGuiInputTextFlags_ReadOnly);
+#endif
 							ImGui::Text("");
 
+#ifndef EPR
 							ImGui::TableSetColumnIndex(1);
 							ImGui::Text("Tranche 4");
 							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -610,6 +668,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							else
 								ImGui::InputTextWithHint("##CycleTranche0", "ex. C2015", TrancheCode[0], IM_ARRAYSIZE(TrancheCode[0]), ImGuiInputTextFlags_ReadOnly);
 							ImGui::Text("");
+#endif
 
 
 							ImGui::EndTable();
@@ -623,12 +682,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							{
 								ImGui::TableNextRow();
 								ImGui::TableSetColumnIndex(0);
+#ifndef EPR
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 								if (ImGui::Button(u8"Folioter avec une page de garde", ImVec2(-1.0f, 30.0f)))
 								{
 
 								}
 								ImGui::PopStyleVar();
+#endif
 
 								ImGui::TableSetColumnIndex(1);
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -733,10 +794,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 													try
 													{
-														wstring TEMPTampon = filesystem::temp_directory_path().wstring() + generate(16) + L"_tr" + to_wstring(t) + L".pdf";
+														//wstring TEMPTampon = filesystem::temp_directory_path().wstring() + generate(16) + L"_tr" + to_wstring(t) + L".pdf";
 														{
-															PoDoFo::PdfStreamedDocument document(TEMPTampon.c_str());
-															PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", false, false, true, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, ConvertWideToANSI(CheminFont).c_str());
+															PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
+															PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, ConvertWideToANSI(CheminFont).c_str());
 															pFont->SetFontSize(TamponPolice);
 															size_t mStarting = 0;
 															size_t mEnding = vecMediaBox.size();
@@ -749,11 +810,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 															for (size_t i = mStarting; i < mEnding; i++)
 															{
-																MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, vecMediaBox.size());
+																MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
 																MessagePercentOPENCours = fmt::format("Tr.{}", t);
-																PoDoFo::PdfPage* pPage = document.CreatePage(vecMediaBox[i]);
+																PoDoFo::PdfPage* pPage = document.GetPage(i)/*.CreatePage(vecMediaBox[i])*/;
 
-																pPage->SetRotation(vecRotation[i]);
+																//pPage->SetRotation(vecRotation[i]);
 																PoDoFo::PdfPainter painter;
 																PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
 
@@ -803,20 +864,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
 																painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
 																painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
+#ifndef EPR
 																painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
+#endif
 
 																painter.SetFont(pFont);//Utilise pFont pour écrire...
 
 																painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
 																PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
-																PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. : " + to_string(t)).c_str()));
+																PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
 																PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
-																PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. : " + string(strINDICEREE)).c_str()));
-																PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio : " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
-																PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle : " + to_string(t) + string(TrancheCode[t])).c_str()));
+																PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
+																PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
+																PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
 
 																painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#ifndef EPR
 																painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#endif
 																painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
 																painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
 																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
@@ -947,62 +1012,62 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 															}
 															MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF temporaire", string(txtSpinner));
 															MessagePercentOPENCours = fmt::format("Tr.{}", t);
-															document.GetInfo()->SetCreator(PoDoFo::PdfString("REEMaker 5"));
-															document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
-															document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
-															document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
-															document.Close();
+															//document.GetInfo()->SetCreator(PoDoFo::PdfString("REEMaker 5"));
+															//document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
+															//document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
+															//document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
+															document.Write(FichierPDFsortie.c_str());
 														}
 														MessageOPENCours = fmt::format(u8"Création des tampons {}\nFusion du fichier PDF temporaire avec la procédure", string(txtSpinner));
 														MessagePercentOPENCours = fmt::format("Tr.{}", t);
 														wstring localwCheminPDF = wCheminPDF;
 
-														{//Partiel ==?? On ampute le PDF!!
-															localwCheminPDF = TEMPTampon + to_wstring(t);
-															SHELLEXECUTEINFO ShExecInfo;
-															ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-															ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-															ShExecInfo.hwnd = NULL;
-															ShExecInfo.lpVerb = NULL;
-															ShExecInfo.lpFile = CheminPDFTK.c_str();
-															wstring mParameter = L"\"" + wCheminPDF + L"\" cat " + to_wstring(u16_PageDebut) + L"-" + to_wstring(u16_PageFin) + L" output \"" + localwCheminPDF + L"\" need_appearances compress";
-															ShExecInfo.lpParameters = mParameter.c_str();
-															ShExecInfo.lpDirectory = CheminBASE.c_str();
-															ShExecInfo.nShow = SW_HIDE;
-															ShExecInfo.hInstApp = NULL;
-															ShellExecuteEx(&ShExecInfo);
-															WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-															CloseHandle(ShExecInfo.hProcess);
-														}
+														//{//Partiel ==?? On ampute le PDF!!
+														//	localwCheminPDF = TEMPTampon + to_wstring(t);
+														//	SHELLEXECUTEINFO ShExecInfo;
+														//	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+														//	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+														//	ShExecInfo.hwnd = NULL;
+														//	ShExecInfo.lpVerb = NULL;
+														//	ShExecInfo.lpFile = CheminPDFTK.c_str();
+														//	wstring mParameter = L"\"" + wCheminPDF + L"\" cat " + to_wstring(u16_PageDebut) + L"-" + to_wstring(u16_PageFin) + L" output \"" + localwCheminPDF + L"\" need_appearances compress";
+														//	ShExecInfo.lpParameters = mParameter.c_str();
+														//	ShExecInfo.lpDirectory = CheminBASE.c_str();
+														//	ShExecInfo.nShow = SW_HIDE;
+														//	ShExecInfo.hInstApp = NULL;
+														//	ShellExecuteEx(&ShExecInfo);
+														//	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+														//	CloseHandle(ShExecInfo.hProcess);
+														//}
 
 														//Fusion avec PDFTK
-														{
-															SHELLEXECUTEINFO ShExecInfo;
-															ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-															ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-															ShExecInfo.hwnd = NULL;
-															ShExecInfo.lpVerb = NULL;
-															ShExecInfo.lpFile = CheminPDFTK.c_str();
-															OutputDebugStringW(FichierPDFsortie.c_str());
-															OutputDebugStringW(L"\n");
-															wstring mParameter;
-															if (radioTotalPartiel == 1)
-																mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + localwCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
-															else
-																mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + wCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
-															ShExecInfo.lpParameters = mParameter.c_str();
-															ShExecInfo.lpDirectory = CheminBASE.c_str();
-															ShExecInfo.nShow = SW_HIDE;
-															ShExecInfo.hInstApp = NULL;
-															ShellExecuteEx(&ShExecInfo);
-															WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-															CloseHandle(ShExecInfo.hProcess);
-														}
-														//Suppression partiel
-														if (radioTotalPartiel == 1)
-															filesystem::remove(localwCheminPDF);
-														//Suppression temp PDF
-														filesystem::remove(TEMPTampon);
+														//{
+														//	SHELLEXECUTEINFO ShExecInfo;
+														//	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+														//	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+														//	ShExecInfo.hwnd = NULL;
+														//	ShExecInfo.lpVerb = NULL;
+														//	ShExecInfo.lpFile = CheminPDFTK.c_str();
+														//	OutputDebugStringW(FichierPDFsortie.c_str());
+														//	OutputDebugStringW(L"\n");
+														//	wstring mParameter;
+														//	if (radioTotalPartiel == 1)
+														//		mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + localwCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
+														//	else
+														//		mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + wCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
+														//	ShExecInfo.lpParameters = mParameter.c_str();
+														//	ShExecInfo.lpDirectory = CheminBASE.c_str();
+														//	ShExecInfo.nShow = SW_HIDE;
+														//	ShExecInfo.hInstApp = NULL;
+														//	ShellExecuteEx(&ShExecInfo);
+														//	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+														//	CloseHandle(ShExecInfo.hProcess);
+														//}
+														////Suppression partiel
+														//if (radioTotalPartiel == 1)
+														//	filesystem::remove(localwCheminPDF);
+														////Suppression temp PDF
+														//filesystem::remove(TEMPTampon);
 
 
 													}
@@ -1088,13 +1153,112 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					}
 					ImGui::EndTabItem();
 				}
+#ifndef EPR
 				if (ImGui::BeginTabItem(ICON_FA_FILE_TEXT_O " Page de garde"))
 				{
 					ImGui::Text("Onglet n°2 : " ICON_FA_BLUETOOTH " " ICON_FA_AMAZON " " ICON_FA_ARROW_LEFT " " ICON_FA_CIRCLE_THIN " " ICON_FA_CLIPBOARD " " ICON_FA_CODIEPIE);
+					ImGui::Text(u8"Modèle de page de garde : ");
+					ImGui::SameLine();
+					const char* combo_label = ListePDGModele[item_current_vPDG].c_str();  // Label to preview before opening the combo (technically it could be anything)
+					if (ImGui::BeginCombo("##CBBoxModelePDG", combo_label, 0 /*flags*/))
+					{
+						for (int n = 0; n < ListePDGModele.size(); n++)
+						{
+							const bool is_selected = (bool)(item_current_vPDG == n);
+							if (ImGui::Selectable(ListePDGModele[n].c_str(), is_selected))
+								item_current_vPDG = n;
+							if (is_selected)
+								ImGui::SetItemDefaultFocus();
+						}
+						ImGui::EndCombo();
+					}
+					ImGui::SameLine();
+					if (ImGui::Button(ICON_FA_RECYCLE "Rafraichir les pages de gardes"))
+					{
+						ListePDGModele.clear();
+						pdgClassSEED = sgenerate(12);
+						for (const auto& p : filesystem::directory_iterator(CheminPDG))
+						{
+							string pPathExtension = p.path().extension().string();
+							transform(pPathExtension.begin(), pPathExtension.end(),pPathExtension.begin(), ::tolower);
+							if (pPathExtension == ".txt")
+							{
+								ListePDGModele.push_back(p.path().filename().u8string());
+							}
+						}
+					}
+					ImGui::Separator();
+					/*
+					* DEBUT DESSIN DYNAMIQUE PDG
+					*/
+					for (size_t lPDG = 0; lPDG < PDGouvert.size(); lPDG++)
+					{
+						wstring firstWord = PDGouvert[lPDG].substr(0, PDGouvert[lPDG].find(L" "));
+						transform(firstWord.begin(), firstWord.end(), firstWord.begin(), ::towlower);
+						if (firstWord == L"demandetexteuneligne")
+						{
+							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"',0);
+							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion +1);
+							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion+ 1);
+							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide +1);
+							wstring Question = PDGouvert[lPDG].substr(DebutQuestion+1, FinQuestion - DebutQuestion - 1);
+							wstring Aide = PDGouvert[lPDG].substr(DebutAide+1, FinAide - DebutAide - 1);
 
+							vector<wstring> mArgument;
+							wsplit(PDGouvert[lPDG].substr(FinAide + 1), mArgument, L' ');
+							if (mArgument.size() > 0)
+								if (mArgument[0] == L"")
+									mArgument.erase(mArgument.begin() + 0);
+							ImGui::SetNextItemWidth(200.0f);
+							ImGui::Text(ConvertWideToANSI(Question).c_str());
+							ImGui::SameLine();
+							ImGui::InputText(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
+								PDGouvertChar[lPDG], IM_ARRAYSIZE(PDGouvertChar[lPDG]), ImGuiInputTextFlags_None);
+							if (Aide != L"")
+							{
+								ImGui::SameLine();
+								HelpMarker(ConvertWideToANSI(Aide).c_str());
+							}
+
+						}
+						else if (firstWord == L"demandetexteplusieurslignes")
+						{
+							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"', 0);
+							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion + 1);
+							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion + 1);
+							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide + 1);
+							wstring Question = PDGouvert[lPDG].substr(DebutQuestion + 1, FinQuestion - DebutQuestion - 1);
+							wstring Aide = PDGouvert[lPDG].substr(DebutAide + 1, FinAide - DebutAide - 1);
+
+							vector<wstring> mArgument;
+							wsplit(PDGouvert[lPDG].substr(FinAide + 1), mArgument, L' ');
+							if (mArgument.size() > 0)
+								if (mArgument[0] == L"")
+									mArgument.erase(mArgument.begin() + 0);
+							ImGui::SetNextItemWidth(200.0f);
+							ImGui::Text(ConvertWideToANSI(Question).c_str());
+							ImGui::SameLine();
+							ImGui::InputTextMultiline(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
+								PDGouvertChar[lPDG], IM_ARRAYSIZE(PDGouvertChar[lPDG]));
+							if (Aide != L"")
+							{
+								ImGui::SameLine();
+								HelpMarker(ConvertWideToANSI(Aide).c_str());
+							}
+
+						}
+						else if (firstWord == L"demandecasecocher")
+						{
+							printf("");
+
+						}
+						
+
+					}
 
 					ImGui::EndTabItem();
 				}
+#endif
 				if (ImGui::BeginTabItem(ICON_FA_COGS " Options"))
 				{
 					ImGui::PushFont(MYFont14bold);
@@ -1212,12 +1376,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						u8"Définition des couleurs à utiliser pour chacune des tranches :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
 					ImGui::SameLine(); HelpMarker(u8"Vous pouvez faire glisser une couleur de la liste des couleurs prédéfinies dans la tranche souhaitée."); ImGui::Text("");
+#ifndef EPR
 					for (size_t k = 0; k < 10; k++)
 					{
 						ImGui::Text("Couleur du tampon tranche %d :", k);
 						ImGui::SameLine();
 						ImGui::ColorEdit4(string("##CouleurTranche" + to_string(k)).c_str(), sListeCouleurTranche[k], ImGuiColorEditFlags_NoAlpha);
 					}
+#else
+					for (size_t k = 3; k < 4; k++)
+					{
+						ImGui::Text("Couleur du tampon tranche %d :", k);
+						ImGui::SameLine();
+						ImGui::ColorEdit4(string("##CouleurTranche" + to_string(k)).c_str(), sListeCouleurTranche[k], ImGuiColorEditFlags_NoAlpha);
+					}
+#endif
 					ImGui::Separator();
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(u8"Emplacement du tampon et marge:");
@@ -1673,7 +1846,18 @@ wstring generate(int max_length) {
 	}
 	return ret;
 }
-
+string sgenerate(int max_length) {
+	string possible_characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+	random_device rd;
+	mt19937 engine(rd());
+	uniform_int_distribution<> dist((int)0, (int)(possible_characters.size() - 1));
+	string ret = "";
+	for (int i = 0; i < max_length; i++) {
+		int random_index = dist(engine); //get index between 0 and possible_characters.size()-1
+		ret += possible_characters[random_index];
+	}
+	return ret;
+}
 /*
 	https://www.codeproject.com/articles/16678/vista-goodies-in-c-using-the-new-vista-file-dialog
 void CMainDlg::OnFileSave()

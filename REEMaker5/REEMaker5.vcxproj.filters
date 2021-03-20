@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BaseSDLimgui.cpp">
+    <ClCompile Include="REEMaker5.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
     <ClCompile Include="include\imgui\imgui.cpp">
@@ -51,9 +51,6 @@
     <ClCompile Include="include\imgui\imgui_freetype.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="include\imgui\imgui_gregory_stub.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Header_Main.h">
@@ -79,12 +76,15 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="BaseSDLimgui.rc">
+    <ResourceCompile Include="REEMaker5.rc">
       <Filter>Fichiers de ressources</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Designcontest-Vintage-Stamp.ico">
+      <Filter>Fichiers de ressources</Filter>
+    </Image>
+    <Image Include="Designcontest-Vintage-Stamp-64only.ico">
       <Filter>Fichiers de ressources</Filter>
     </Image>
   </ItemGroup>

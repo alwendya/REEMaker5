@@ -22,7 +22,7 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{24619374-818d-43ac-b8ff-19206fe77839}</ProjectGuid>
-    <RootNamespace>BaseSDLimgui</RootNamespace>
+    <RootNamespace>REEMaker5</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -156,14 +156,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="BaseSDLimgui.cpp" />
+    <ClCompile Include="REEMaker5.cpp" />
     <ClCompile Include="include\fmt\format.cc" />
     <ClCompile Include="include\fmt\os.cc" />
     <ClCompile Include="include\imgui\imgui.cpp" />
     <ClCompile Include="include\imgui\imgui_demo.cpp" />
     <ClCompile Include="include\imgui\imgui_draw.cpp" />
     <ClCompile Include="include\imgui\imgui_freetype.cpp" />
-    <ClCompile Include="include\imgui\imgui_gregory_stub.cpp" />
     <ClCompile Include="include\imgui\imgui_impl_opengl2.cpp" />
     <ClCompile Include="include\imgui\imgui_impl_sdl.cpp" />
     <ClCompile Include="include\imgui\imgui_impl_win32.cpp" />
@@ -180,9 +179,10 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="BaseSDLimgui.rc" />
+    <ResourceCompile Include="REEMaker5.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Designcontest-Vintage-Stamp-64only.ico" />
     <Image Include="Designcontest-Vintage-Stamp.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

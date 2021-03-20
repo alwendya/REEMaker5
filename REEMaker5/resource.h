@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // fichier Include Microsoft Visual C++.
-// Utilisé par BaseSDLimgui.rc
+// Utilisé par REEMaker5.rc
 //
 #define IDI_ICON1                       101
 
