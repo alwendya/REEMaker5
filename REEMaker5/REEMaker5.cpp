@@ -22,16 +22,6 @@ public:
 	}
 };
 
-struct BenchStruct
-{
-	int Level = 0;
-	UINT64 TailleOriginal = 0;
-	UINT64 TailleCompressé = 0;
-	double Ratio = 0.;
-	double TempsCompression = 0.;
-	double DebitMbs = 0.;
-};
-std::vector<BenchStruct> vecBench;
 constexpr auto OpEnCoursWidth = 200.0f;
 constexpr auto OpEnCoursHeight = 200.0f;
 constexpr auto mFenWidth = 1280.0f;
@@ -50,6 +40,7 @@ static wstring CheminFont(L"");
 static wstring CheminCompacteRepare(L"");
 static wstring CheminPopplerPDFPPM(L"");
 static wstring FichierPDFsortie(L"");
+static wstring CheminTemp(L"");
 static vector<PoDoFo::PdfRect> vecMediaBox;
 static vector<int> vecRotation;
 static vector<string> ListePDGModele;
@@ -110,6 +101,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminCompacteRepare = CheminBASE + L"CompRepare\\CompacteRepareCommandLine.exe";
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
 
+	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP";
+	try
+	{
+		filesystem::create_directories(CheminTemp);
+	}
+	catch (const std::exception&)
+	{
+
+	}
+
 	ListePDGModele.clear();
 	pdgClassSEED = sGenerate(12);
 	item_current_vPDG = 0;
@@ -144,7 +145,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			wstring line;
 			while (getline(input_file, line)) {
 				if (line.size() > 2)
-					if (line.substr(0,2) != L"::")
+					if (line.substr(0, 2) != L"::")
 						PDGouvert.push_back(line);
 			}
 			input_file.close();
@@ -198,9 +199,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	static bool AfficheTrancheProcedure = false;
 	static bool BoutonContinueFolioProcedure = true;
 	static bool AfficheFolioProcedure = false;
+	static std::string CheminPDForiginal("");
+	static std::wstring wCheminPDForiginal(L"");
 	static std::string CheminPDF("");
-	static std::string InformationPDF("");
 	static std::wstring wCheminPDF(L"");
+	static std::string InformationPDF("");
 	ListeCouleur.clear();
 	Couleur mCouleur;
 	{
@@ -308,18 +311,58 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
 								if (SUCCEEDED(hr))
 								{
-									CheminPDF = fileHELPER.ConvertWideToUtf8(wstring(pwsz));
-									wCheminPDF = wstring(pwsz);
+									wCheminPDForiginal = wstring(pwsz);
+									CheminPDForiginal = fileHELPER.ConvertWideToUtf8(wCheminPDForiginal);
 									CoTaskMemFree(pwsz);
+									//On a le fichier PDF, on s'assure qu'il n'y a aucun reliquat en %TEMP%\REEMAKER.TMP\*.pdf
+									try
+									{
+										uintmax_t resRemove = filesystem::remove_all(CheminTemp);
+										filesystem::create_directories(CheminTemp);
+									}
+									catch (const std::exception&)
+									{
+
+									}
 									std::thread t([]()
 										{
+											MessageOPENCours = fmt::format("Appropriation du document PDF..");
+											MessagePercentOPENCours = "";
+											wCheminPDF = CheminTemp + L"\\pdftemp_" + wGenerate(12) + L".pdf";
+											CheminPDF = fileHELPER.ConvertWideToUtf8(wCheminPDF);
+
+											SHELLEXECUTEINFO ShExecInfo;
+											ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+											ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+											ShExecInfo.hwnd = NULL;
+											ShExecInfo.lpVerb = NULL;
+											ShExecInfo.lpFile = CheminCompacteRepare.c_str();
+											wstring mParameter = fileHELPER.ConvertUtf8ToWide(fmt::format("comprep \"{}\" \"{}\"",CheminPDForiginal,CheminPDF));
+											ShExecInfo.lpParameters = mParameter.c_str();
+											ShExecInfo.lpDirectory = CheminBASE.c_str();
+											ShExecInfo.nShow = SW_HIDE;
+											ShExecInfo.hInstApp = NULL;
+											ShellExecuteEx(&ShExecInfo);
+											WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+											DWORD processExitCode;
+											GetExitCodeProcess(ShExecInfo.hProcess, &processExitCode);
+											CloseHandle(ShExecInfo.hProcess);
+											if (processExitCode != 4)
+												try
+											{
+												filesystem::copy_file(wCheminPDForiginal,wCheminPDF);
+											}
+											catch (const std::exception&)
+											{
+
+											}
 											MessageOPENCours = fmt::format("Analyse du document PDF..");
 											MessagePercentOPENCours = "";
 											try
 											{
 												vecMediaBox.clear();
 												vecRotation.clear();
-												PoDoFo::PdfMemDocument documentSource(wCheminPDF.c_str());
+												PoDoFo::PdfMemDocument documentSource(wCheminPDForiginal.c_str());
 												int nbPages = documentSource.GetPageCount();
 												for (size_t i = 0; i < nbPages; i++)
 												{
@@ -330,8 +373,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 													MessagePercentOPENCours = fmt::format("{}%", (int)(((float)i / nbPages) * 100.0f) + 1);
 												}
 												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024);
-												memcpy_s(strCHEMINPROCEDURE, CheminPDF.size(), &CheminPDF[0], CheminPDF.size());
-												strCHEMINPROCEDURE[CheminPDF.size()] = '\0';
+												memcpy_s(strCHEMINPROCEDURE, CheminPDForiginal.size(), &CheminPDForiginal[0], CheminPDForiginal.size());
+												strCHEMINPROCEDURE[CheminPDForiginal.size()] = '\0';
 												this_thread::sleep_for(500ms);
 												BoutonContinueCheminProcedure = true;
 											}
@@ -699,7 +742,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
 										pDlg->SetTitle(L"Enregistrer la procédure foliotée");
 										pDlg->SetOkButtonLabel(L"&Sauvegarder");
-										wstring CustomCheminPDF = wCheminPDF;
+										wstring CustomCheminPDF = wCheminPDForiginal;
 										CustomCheminPDF = CustomCheminPDF.substr(0, CustomCheminPDF.length() - 4);
 										CustomCheminPDF += L"_foliotée";
 										pDlg->SetFileName(CustomCheminPDF.c_str());
@@ -785,7 +828,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 													try
 													{
-														//wstring TEMPTampon = filesystem::temp_directory_path().wstring() + wGenerate(16) + L"_tr" + to_wstring(t) + L".pdf";
+														wstring TR_FichierPDFSortie = FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf";
 														{
 															PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
 															PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, fileHELPER.ConvertWideToANSI(CheminFont).c_str());
@@ -825,9 +868,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																* b = sin (alpha);					  1				   0			    -1
 																* c = -sin(alpha);					 -1				   0			     1
 																* d = cos (alpha);					  0				  -1			     0
-																* e = coord X Rotation 	     ValHauteur       ValLargeur                 0	
-																* f = coord Y Rotation			      0       ValHauteur        ValLargeur						
-																* 
+																* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
+																* f = coord Y Rotation			      0       ValHauteur        ValLargeur
+																*
 																* e et f = point de rotation
 																* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
 																*/
@@ -1001,66 +1044,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 																painter.FinishPage();
 
 															}
-															MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF temporaire", string(txtSpinner));
+															MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
 															MessagePercentOPENCours = fmt::format("Tr.{}", t);
 															//document.GetInfo()->SetCreator(PoDoFo::PdfString("REEMaker 5"));
 															//document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
 															//document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
 															//document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
-															document.Write(FichierPDFsortie.c_str());
+															document.Write(TR_FichierPDFSortie.c_str());
 														}
-														MessageOPENCours = fmt::format(u8"Création des tampons {}\nFusion du fichier PDF temporaire avec la procédure", string(txtSpinner));
-														MessagePercentOPENCours = fmt::format("Tr.{}", t);
-														wstring localwCheminPDF = wCheminPDF;
-
-														//{//Partiel ==?? On ampute le PDF!!
-														//	localwCheminPDF = TEMPTampon + to_wstring(t);
-														//	SHELLEXECUTEINFO ShExecInfo;
-														//	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-														//	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-														//	ShExecInfo.hwnd = NULL;
-														//	ShExecInfo.lpVerb = NULL;
-														//	ShExecInfo.lpFile = CheminPDFTK.c_str();
-														//	wstring mParameter = L"\"" + wCheminPDF + L"\" cat " + to_wstring(u16_PageDebut) + L"-" + to_wstring(u16_PageFin) + L" output \"" + localwCheminPDF + L"\" need_appearances compress";
-														//	ShExecInfo.lpParameters = mParameter.c_str();
-														//	ShExecInfo.lpDirectory = CheminBASE.c_str();
-														//	ShExecInfo.nShow = SW_HIDE;
-														//	ShExecInfo.hInstApp = NULL;
-														//	ShellExecuteEx(&ShExecInfo);
-														//	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-														//	CloseHandle(ShExecInfo.hProcess);
-														//}
-
-														//Fusion avec PDFTK
-														//{
-														//	SHELLEXECUTEINFO ShExecInfo;
-														//	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-														//	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-														//	ShExecInfo.hwnd = NULL;
-														//	ShExecInfo.lpVerb = NULL;
-														//	ShExecInfo.lpFile = CheminPDFTK.c_str();
-														//	OutputDebugStringW(FichierPDFsortie.c_str());
-														//	OutputDebugStringW(L"\n");
-														//	wstring mParameter;
-														//	if (radioTotalPartiel == 1)
-														//		mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + localwCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
-														//	else
-														//		mParameter = L"\"" + TEMPTampon + L"\" multistamp \"" + wCheminPDF + L"\" output \"" + FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf\" need_appearances compress";
-														//	ShExecInfo.lpParameters = mParameter.c_str();
-														//	ShExecInfo.lpDirectory = CheminBASE.c_str();
-														//	ShExecInfo.nShow = SW_HIDE;
-														//	ShExecInfo.hInstApp = NULL;
-														//	ShellExecuteEx(&ShExecInfo);
-														//	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-														//	CloseHandle(ShExecInfo.hProcess);
-														//}
-														////Suppression partiel
-														//if (radioTotalPartiel == 1)
-														//	filesystem::remove(localwCheminPDF);
-														////Suppression temp PDF
-														//filesystem::remove(TEMPTampon);
-
-
 													}
 													catch (const PoDoFo::PdfError& e)
 													{
@@ -1079,21 +1070,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 														OutputDebugStringA("Erreur type inconnu\n");
 													}
 												}
-												MessageOPENCours = fmt::format(u8"Fin de la création des tampons.");
+												MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
 												MessagePercentOPENCours = fmt::format("");
 												this_thread::sleep_for(1s);
 												AfficheFenetreSpinnerthreadFolioSansPDG = false;
 											});
 										t.detach();
-
 									}
-
-
-
-
-
-
-
 								}
 								ImGui::PopStyleVar();
 								ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
@@ -1210,12 +1193,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						transform(firstWord.begin(), firstWord.end(), firstWord.begin(), ::towlower);
 						if (firstWord == L"demandetexteuneligne")
 						{
-							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"',0);
-							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion +1);
-							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion+ 1);
-							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide +1);
-							wstring Question = PDGouvert[lPDG].substr(DebutQuestion+1, FinQuestion - DebutQuestion - 1);
-							wstring Aide = PDGouvert[lPDG].substr(DebutAide+1, FinAide - DebutAide - 1);
+							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"', 0);
+							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion + 1);
+							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion + 1);
+							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide + 1);
+							wstring Question = PDGouvert[lPDG].substr(DebutQuestion + 1, FinQuestion - DebutQuestion - 1);
+							wstring Aide = PDGouvert[lPDG].substr(DebutAide + 1, FinAide - DebutAide - 1);
 
 							vector<wstring> mArgument;
 							wsplit(PDGouvert[lPDG].substr(FinAide + 1), mArgument, L' ');
@@ -1265,7 +1248,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							printf("");
 
 						}
-						
+
 
 					}
 
@@ -1476,6 +1459,9 @@ Programme sous licence GPL 3
   * [Tiff](https://gitlab.com/libtiff/libtiff)
     Gestion de fichier Tiff.
     Licence domaine public.
+  * [FMT](https://github.com/fmtlib/fmt/)
+    Librairie de formatage de texte.
+    [Licence 'MIT'](https://raw.githubusercontent.com/fmtlib/fmt/master/LICENSE.rst).
 
 ## Les executables suivants sont utilisés :
   * [Poppler PDFToPPM](https://poppler.freedesktop.org)
