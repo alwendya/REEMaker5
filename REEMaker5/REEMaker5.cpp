@@ -5,13 +5,25 @@
 #include "Header__CryptoZstd.h"
 #include "Header__WinToast.h"
 using namespace std;
+
+/*
+TODO : Vérifier présence page de garde modèle
+
+
+*/
+
 /*
 * Prototype
 */
 bool SauveParametres();
 bool ChargeParametres();
+bool GenereMiniature(int, int, int, std::wstring);
+bool GenereMiniatureMIN(int, int, int, std::wstring);
+void MyTrace(int line, const char* fileName, const char* msg, ...);
+void MyMsg(int line, const char* fileName, const char* msg, ...);
 
-
+#define MY_TRACE(msg, ...) MyTrace(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
+#define MY_MSG(msg, ...) MyMsg(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
 
 class PDFError :public exception
 {
@@ -22,15 +34,20 @@ public:
 	}
 };
 
+
+
 constexpr auto OpEnCoursWidth = 200.0f;
 constexpr auto OpEnCoursHeight = 200.0f;
 constexpr auto mFenWidth = 1280.0f;
 constexpr auto mFenHeight = 720.0f;
+static ImVec2 BoutonSuivant(84.0f, 22.0f);
 
 FileHelper fileHELPER(L"");
 // Mes vars internes
 bool show_demo_window = false;
 ImVec4 clear_color = IMVEC4_COL16(115, 135, 150, 255);
+
+HWND mHwnd;
 
 static std::string MessageOPENCours("Analyse du document en cours");
 static std::string MessagePercentOPENCours("12 %");
@@ -39,6 +56,8 @@ static wstring CheminBASE(L"");
 static wstring CheminFont(L"");
 static wstring CheminCompacteRepare(L"");
 static wstring CheminPopplerPDFPPM(L"");
+static wstring CheminPopplerPDFPPMTempOut(L"");
+static wstring CheminPopplerPDFPPMTempOutMini(L"");
 static wstring FichierPDFsortie(L"");
 static wstring CheminTemp(L"");
 static vector<PoDoFo::PdfRect> vecMediaBox;
@@ -60,6 +79,14 @@ static bool tabFolioter = true;
 static bool tabPageDeGarde = true;
 static bool tabParametre = true;
 static int radioTotalPartiel = 0;
+static bool FolioProcedureAAnnuler[9999];
+static bool isGenereMiniature = false;
+static bool isLoadingMiniature = false;
+static int NombreCoeur = 2;
+static int GenereMiniaturefileCount = 0;
+static int MiniatureSelectionnee = 0;
+plf::nanotimer tmrGenereMiniature;
+
 
 /*  0=HautGauche 1=HautDroite(DEFAUT) 2=BasGauche 3=BasDroite*/
 static int radioEmplacementTampon = 1;
@@ -76,12 +103,27 @@ struct Couleur
 	bool Locked = false;
 	ImVec4 CodeCouleur = { 0.0f,0.0f,0.0f,0.0f };
 };
+struct TextureSTB
+{
+	int my_image_width;
+	int my_image_height;
+	GLuint my_image_texture;
+	bool my_image_success_loading;
+	std::string Chemin;
+};
+std::vector<TextureSTB> vecListeTexture;
+std::vector<TextureSTB> vecListeTextureMaxiPathOnly;
+static int CompteLoading = 0;
+TextureSTB mApercuTexture;
+
 vector<Couleur> ListeCouleur;
 static float sListeCouleurTranche[10][4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+	NombreCoeur = NombreCPU();
+	MY_MSG("Init : %d cpu", NombreCoeur);
 	/* A 256 bit key :  32char = 256bits*/
 	std::string key(AY_OBFUSCATE("QxXtiJw^&gh79ZkBDC$bLMESpYJ8VX&X"));
 	/* A 128 bit IV :  16char = 128bits*/
@@ -101,14 +143,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminCompacteRepare = CheminBASE + L"CompRepare\\CompacteRepareCommandLine.exe";
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
 
-	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP";
+	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
 	try
 	{
 		filesystem::create_directories(CheminTemp);
 	}
-	catch (const std::exception&)
+	catch (const std::exception& e)
 	{
-
+		MY_TRACE("Exception a la ligne:  %s", e.what());
 	}
 
 	ListePDGModele.clear();
@@ -176,6 +218,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	io.IniFilename = NULL;
 	ImGui::/*StyleColorsLightGreen*/StyleColorBlackWhite();
 	SDL_SetWindowMinimumSize(window, 1024, 720);
+	/*
+	* Get Hwnd
+	*/
+	struct SDL_SysWMinfo wmInfo;
+	SDL_VERSION(&wmInfo.version);
+	SDL_GetWindowWMInfo(window, &wmInfo);
+	mHwnd = wmInfo.info.win.window;
+
+
 	//FONT AWESOME merged with Droid
 	ImFont* MYFont = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(droidSansFont_compressed_data, droidSansFont_compressed_size, 14.0f);
 	static const ImWchar icons_ranges[] = { 0xf000, 0xf3ff, 0 }; // Will not be copied by AddFont* so keep in scope.
@@ -198,6 +249,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	static bool BoutonContinueTrancheProcedure = true;
 	static bool AfficheTrancheProcedure = false;
 	static bool BoutonContinueFolioProcedure = true;
+	static bool AfficheAnnuleFolioProcedure = false;
+	static bool BoutonAfficheAnnuleFolioProcedure = true;
 	static bool AfficheFolioProcedure = false;
 	static std::string CheminPDForiginal("");
 	static std::wstring wCheminPDForiginal(L"");
@@ -271,7 +324,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					ImGui::Text(u8"Chemin de la procédure :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Chemin de la procédure :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
-					ImGui::SameLine(); HelpMarker(u8"Cliquer sur le bouton Rechercher pour sélectionner la procédure PDF à passer REE."); ImGui::Text("");
+					ImGui::SameLine(); HelpMarker(u8"Cliquer sur le bouton Rechercher pour sélectionner la procédure PDF à passer REE."); /*ImGui::Text("");*/
 
 					float fenInsideWidth = ImGui::GetWindowContentRegionWidth();
 
@@ -300,7 +353,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							return -1;
 						pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
 						pDlg->SetTitle(L"Rechercher la procédure PDF à passer REE");
-						hr = pDlg->Show(/*m_hWnd*/NULL);
+						hr = pDlg->Show(mHwnd);
 						if (SUCCEEDED(hr))
 						{
 							CComPtr<IShellItem> pItem;
@@ -314,16 +367,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 									wCheminPDForiginal = wstring(pwsz);
 									CheminPDForiginal = fileHELPER.ConvertWideToUtf8(wCheminPDForiginal);
 									CoTaskMemFree(pwsz);
-									//On a le fichier PDF, on s'assure qu'il n'y a aucun reliquat en %TEMP%\REEMAKER.TMP\*.pdf
+									//On a le fichier PDF, on s'assure qu'il n'y a aucun reliquat en %TEMP%\REEMAKER.TMP\ %session% \*.pdf
 									try
 									{
 										uintmax_t resRemove = filesystem::remove_all(CheminTemp);
 										filesystem::create_directories(CheminTemp);
 									}
-									catch (const std::exception&)
+									catch (const std::exception& e)
 									{
-
+										MY_TRACE("Exception a la ligne:  %s", e.what());
 									}
+									/* THREAD APPROPRIATION PDF (PDF Compacte et repare + Vector MediaBox*/
 									std::thread t([]()
 										{
 											MessageOPENCours = fmt::format("Appropriation du document PDF..");
@@ -337,7 +391,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 											ShExecInfo.hwnd = NULL;
 											ShExecInfo.lpVerb = NULL;
 											ShExecInfo.lpFile = CheminCompacteRepare.c_str();
-											wstring mParameter = fileHELPER.ConvertUtf8ToWide(fmt::format("comprep \"{}\" \"{}\"",CheminPDForiginal,CheminPDF));
+											wstring mParameter = fileHELPER.ConvertUtf8ToWide(fmt::format("comprep \"{}\" \"{}\"", CheminPDForiginal, CheminPDF));
 											ShExecInfo.lpParameters = mParameter.c_str();
 											ShExecInfo.lpDirectory = CheminBASE.c_str();
 											ShExecInfo.nShow = SW_HIDE;
@@ -350,11 +404,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 											if (processExitCode != 4)
 												try
 											{
-												filesystem::copy_file(wCheminPDForiginal,wCheminPDF);
+												filesystem::copy_file(wCheminPDForiginal, wCheminPDF);
 											}
-											catch (const std::exception&)
+											catch (const std::exception& e)
 											{
-
+												MY_TRACE("Exception a la ligne:  %s", e.what());
 											}
 											MessageOPENCours = fmt::format("Analyse du document PDF..");
 											MessagePercentOPENCours = "";
@@ -372,7 +426,51 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 													MessageOPENCours = fmt::format(string("Analyse du document PDF " + string(txtSpinner)));
 													MessagePercentOPENCours = fmt::format("{}%", (int)(((float)i / nbPages) * 100.0f) + 1);
 												}
-												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024);
+												string PdfVErsionToString = "";
+												switch (documentSource.GetPdfVersion())
+												{
+												case PoDoFo::ePdfVersion_1_0:
+													PdfVErsionToString = "PDF Version 1.0";
+													break;
+												case PoDoFo::ePdfVersion_1_1:
+													PdfVErsionToString = "PDF Version 1.1";
+													break;
+												case PoDoFo::ePdfVersion_1_2:
+													PdfVErsionToString = "PDF Version 1.2";
+													break;
+												case PoDoFo::ePdfVersion_1_3:
+													PdfVErsionToString = "PDF Version 1.3";
+													break;
+												case PoDoFo::ePdfVersion_1_4:
+													PdfVErsionToString = "PDF Version 1.4";
+													break;
+												case PoDoFo::ePdfVersion_1_5:
+													PdfVErsionToString = "PDF Version 1.5";
+													break;
+												case PoDoFo::ePdfVersion_1_6:
+													PdfVErsionToString = "PDF Version 1.6";
+													break;
+												case PoDoFo::ePdfVersion_1_7:
+													PdfVErsionToString = "PDF Version 1.7";
+													break;
+												default:
+													PdfVErsionToString = "PDF Version Inconnu";
+													break;
+												}
+												string pdfDETAIL = "";
+												try
+												{
+													//PoDoFo::PdfString podofoDate("");
+													//documentSource.GetInfo()->GetCreationDate().ToString(podofoDate);
+													string sDATETIME = fmt::format(u8"{:%Y/%m/%d %H:%M:%S}", fmt::localtime(documentSource.GetInfo()->GetCreationDate().GetTime()));
+													pdfDETAIL = fmt::format(u8"Auteur : {}, Crée par : {}, Le {}",documentSource.GetInfo()->GetAuthor().GetStringUtf8(), documentSource.GetInfo()->GetCreator().GetStringUtf8(), sDATETIME);
+												}
+												catch (const std::exception&)
+												{
+													pdfDETAIL = "Impossible d'avoir les informations du documents...";
+												}
+
+												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo [{}, {}]", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024,PdfVErsionToString, pdfDETAIL);
 												memcpy_s(strCHEMINPROCEDURE, CheminPDForiginal.size(), &CheminPDForiginal[0], CheminPDForiginal.size());
 												strCHEMINPROCEDURE[CheminPDForiginal.size()] = '\0';
 												this_thread::sleep_for(500ms);
@@ -380,6 +478,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 											}
 											catch (const PoDoFo::PdfError& e)
 											{
+												MY_TRACE("Exception a la ligne : %s", e.what());
 												if (e.GetError() == PoDoFo::ePdfError_FileNotFound)
 													InformationPDF = fmt::format(u8"Erreur : Le fichier est introuvable");
 												else if (e.GetError() == PoDoFo::ePdfError_BrokenFile)
@@ -397,9 +496,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 											BoutonContinueTrancheProcedure = true;
 											AfficheTrancheProcedure = false;
 											BoutonContinueFolioProcedure = true;
+											BoutonAfficheAnnuleFolioProcedure = true;
+											AfficheAnnuleFolioProcedure = false;
 											AfficheFolioProcedure = false;
 											AfficheFenetreSpinner = false;
-										}
+										}//123
 									);
 									t.detach();
 								}
@@ -420,7 +521,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					ImGui::PopFont();
 
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueCheminProcedure", BoutonContinueCheminProcedure))
+					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+					if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueCheminProcedure", BoutonContinueCheminProcedure, BoutonSuivant))
 					{
 						BoutonContinueCheminProcedure = false;
 						AfficheReferenceProcedure = true;
@@ -434,13 +536,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::Text(u8"Référence du tampon REE :");
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Référence du tampon REE :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez saisir la référence de la procédure à passer REE.\nIl faut saisir le site, le palier, REE, chantier ou non, système élémentaire, numéro de la procédure"); ImGui::Text("");
+						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez saisir la référence de la procédure à passer REE.\nIl faut saisir le site, le palier, REE, chantier ou non, système élémentaire, numéro de la procédure"); /*ImGui::Text("");*/
 						/****************/
 						ImGui::Text(u8"Nom du site : ");
 						ImGui::SameLine();
-						ImGui::SetNextItemWidth(250.0f);
 						if (AfficheFolioProcedure)
 							ImGui::PushFont(MYFont14bold);
+						ImGui::SetNextItemWidth(180.0f);
 						ImGui::InputTextWithHint("##NomDuSite", "ex. Flamanville", NomSite, IM_ARRAYSIZE(NomSite), AfficheFolioProcedure ? ImGuiInputTextFlags_ReadOnly : 0);
 						if (AfficheFolioProcedure)
 							ImGui::PopFont();
@@ -448,9 +550,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						/****************/
 						ImGui::Text(u8"Référence de la procédure : ");
 						ImGui::SameLine();
-						ImGui::SetNextItemWidth(250.0f);
 						if (AfficheFolioProcedure)
 							ImGui::PushFont(MYFont14bold);
+						ImGui::SetNextItemWidth(180.0f);
 						ImGui::InputTextWithHint("##ReferenceProcedure", "ex. YR REE LHR 104", strREFERENCEREE, IM_ARRAYSIZE(strREFERENCEREE), AfficheFolioProcedure ? ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsUppercase : ImGuiInputTextFlags_CharsUppercase);
 						if (AfficheFolioProcedure)
 							ImGui::PopFont();
@@ -460,6 +562,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::SameLine();
 						if (AfficheFolioProcedure)
 							ImGui::PushFont(MYFont14bold);
+						ImGui::SetNextItemWidth(80.0f);
 						ImGui::InputTextWithHint("##IndiceProcedure", "ex. A ou PREL", strINDICEREE, IM_ARRAYSIZE(strINDICEREE), AfficheFolioProcedure ? ImGuiInputTextFlags_ReadOnly : 0);
 						if (AfficheFolioProcedure)
 							ImGui::PopFont();
@@ -469,7 +572,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								BoutonContinueReferenceProcedure = true;
 							else
 								BoutonContinueReferenceProcedure = false;
-						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueReferenceProcedure", BoutonContinueReferenceProcedure))
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueReferenceProcedure", BoutonContinueReferenceProcedure, BoutonSuivant))
 						{
 							BoutonContinueReferenceProcedure = false;
 							AfficheFolioProcedure = true;
@@ -483,7 +587,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::Text(u8"Etendue du foliotage :");
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Etendue du foliotage :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si la procédure est folioté en totalitée ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné."); ImGui::Text("");
+						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si la procédure est folioté en totalitée ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné."); /*ImGui::Text("");*/
 
 						if (ImGui::BeginTable("##TableTotalPartiel", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 55.0f)))
 						{
@@ -523,13 +627,159 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						}
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueFolioProcedure", BoutonContinueFolioProcedure))
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueFolioProcedure", BoutonContinueFolioProcedure, BoutonSuivant))
 						{
 							BoutonContinueFolioProcedure = false;
-							AfficheTrancheProcedure = true;
+							AfficheAnnuleFolioProcedure = true;
 						}
 						ImGui::PopStyleVar();
 
+					}
+
+					if (AfficheAnnuleFolioProcedure)
+					{
+						ImGui::Separator();
+						ImGui::PushFont(MYFont14bold);
+						ImGui::Text(u8"Annuler un ou plusieurs folio(s) :");
+						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f),
+							ImVec2(ImGui::CalcTextSize(u8"Annuler un ou plusieurs folio(s) :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
+						ImGui::PopFont();
+						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si vous souhaitez que un/des folio(s) soit annulés (trait qui barre la page)."); /*ImGui::Text("");*/
+						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+						if (ImGui::Button(u8"Choisir les folio à annuler##BoutonAfficheFenetreAnnulation", ImVec2(400.0f, 22.0f)))
+						{
+							CheminPopplerPDFPPMTempOut = CheminTemp + L"\\" + wGenerate(8) + L"." + wGenerate(3);
+							CheminPopplerPDFPPMTempOutMini = CheminTemp + L"\\" + wGenerate(8) + L"." + wGenerate(3);
+							isGenereMiniature = true;
+							isLoadingMiniature = true;
+							MiniatureSelectionnee = 0;
+							vecListeTexture.clear();
+							vecListeTextureMaxiPathOnly.clear();
+							CompteLoading = 0;
+							tmrGenereMiniature.start();
+							GenereMiniaturefileCount = 0;
+							ImGui::OpenPopup("Annulation de folio##AnnulationFolio");
+							//THREAD 
+							std::thread tTHREAD([]() {
+								{
+									const int BlocPage = 20;
+									const int nbTotalThread = NombreCoeur;
+									ctpl::thread_pool p(nbTotalThread);
+
+									int nbPageTotal = vecMediaBox.size();
+									vector<int> vecDOCPDF;
+									for (size_t i = 0; i < nbPageTotal; i++)
+										vecDOCPDF.push_back(i + 1);
+									try
+									{
+										filesystem::create_directories(CheminPopplerPDFPPMTempOut);
+									}
+									catch (const std::exception& e)
+									{
+										MY_TRACE("Exception a la ligne:  %s", e.what());
+									}
+									if (vecDOCPDF.size() <= BlocPage)
+										std::future<bool> qw = p.push(GenereMiniature, 1, vecDOCPDF.size(), wCheminPDF);
+									else
+									{
+										while (true)
+										{
+											if (vecDOCPDF.size() < BlocPage)
+											{
+												std::future<bool> qw = p.push(GenereMiniature, vecDOCPDF[0], vecDOCPDF[vecDOCPDF.size() - 1], wCheminPDF);
+												break;
+											}
+											std::future<bool> qw = p.push(GenereMiniature, vecDOCPDF[0], vecDOCPDF[BlocPage - 1], wCheminPDF);
+											vecDOCPDF.erase(vecDOCPDF.begin() + 0, vecDOCPDF.begin() + BlocPage);
+										}
+									}
+									p.stop(true);
+									auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOut);
+									try {
+										for (auto& entry : dirIter)
+										{
+											if (entry.is_regular_file())
+											{
+												TextureSTB mTex;
+												mTex.Chemin = entry.path().string();
+												mTex.my_image_success_loading = false;
+												vecListeTextureMaxiPathOnly.push_back(mTex);
+											}
+										}
+									}
+									catch (const std::exception& e)
+									{
+										MY_TRACE("Exception a la ligne:  %s", e.what());
+									}
+									MY_MSG("Fin génération miniature en %sms", to_string(tmrGenereMiniature.get_elapsed_ms()).c_str());
+								}
+								{
+									const int BlocPage = 20;
+									const int nbTotalThread = NombreCoeur;
+									ctpl::thread_pool p(nbTotalThread);
+
+									int nbPageTotal = vecMediaBox.size();
+									vector<int> vecDOCPDF;
+									for (size_t i = 0; i < nbPageTotal; i++)
+										vecDOCPDF.push_back(i + 1);
+									try
+									{
+										filesystem::create_directories(CheminPopplerPDFPPMTempOutMini);
+									}
+									catch (const std::exception& e)
+									{
+										MY_TRACE("Exception a la ligne:  %s", e.what());
+									}
+									if (vecDOCPDF.size() <= BlocPage)
+										std::future<bool> qw = p.push(GenereMiniatureMIN, 1, vecDOCPDF.size(), wCheminPDF);
+									else
+									{
+										while (true)
+										{
+											if (vecDOCPDF.size() < BlocPage)
+											{
+												std::future<bool> qw = p.push(GenereMiniatureMIN, vecDOCPDF[0], vecDOCPDF[vecDOCPDF.size() - 1], wCheminPDF);
+												break;
+											}
+											std::future<bool> qw = p.push(GenereMiniatureMIN, vecDOCPDF[0], vecDOCPDF[BlocPage - 1], wCheminPDF);
+											vecDOCPDF.erase(vecDOCPDF.begin() + 0, vecDOCPDF.begin() + BlocPage);
+										}
+									}
+									p.stop(true);
+									auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOutMini);
+									try {
+										for (auto& entry : dirIter)
+										{
+											if (entry.is_regular_file())
+											{
+												TextureSTB mTex;
+												mTex.Chemin = entry.path().string();
+												mTex.my_image_success_loading = false;
+												vecListeTexture.push_back(mTex);
+											}
+										}
+									}
+									catch (const std::exception& e)
+									{
+										MY_TRACE("Exception a la ligne:  %s", e.what());
+									}
+
+									isGenereMiniature = false;
+									MY_MSG("Fin génération miniature 64px en %sms", to_string(tmrGenereMiniature.get_elapsed_ms()).c_str());
+								}
+
+								});
+							tTHREAD.detach();
+						}
+
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonAfficheAnnuleFolioProcedure", BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
+						{
+							BoutonAfficheAnnuleFolioProcedure = false;
+							AfficheTrancheProcedure = true;
+						}
+						ImGui::PopStyleVar();
 					}
 
 					if (AfficheTrancheProcedure)
@@ -760,8 +1010,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 												{
 													FoundAfile = true;
 													FichierPDFsortie = wstring(pwsz);
-													OutputDebugStringW(FichierPDFsortie.c_str());
-													OutputDebugStringW(L"\n");
+													MY_MSG("MSG: Enregistrer sous %s", string(FichierPDFsortie.begin(), FichierPDFsortie.end()));
 													CoTaskMemFree(pwsz);
 												}
 											}
@@ -1055,19 +1304,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 													}
 													catch (const PoDoFo::PdfError& e)
 													{
-														OutputDebugStringA("Erreur type PDFError : ");
-														OutputDebugStringA(e.what());
-														OutputDebugStringA("\n");
+														MY_TRACE("Exception a la ligne %s", e.what());
 													}
 													catch (exception& ex)
 													{
-														OutputDebugStringA("Erreur type exception : ");
-														OutputDebugStringA(ex.what());
-														OutputDebugStringA("\n");
+														MY_TRACE("Exception a la ligne %s", ex.what());
 													}
 													catch (...)
 													{
-														OutputDebugStringA("Erreur type inconnu\n");
+														MY_TRACE("Exception inconnue a la ligne ..");
 													}
 												}
 												MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
@@ -1099,10 +1344,242 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										ImGui::CloseCurrentPopup();
 									ImGui::EndPopup();
 								}
+								ImGui::EndTable();
+							}
+					}
+					auto GG1 = ImGui::GetContentRegionMax().y - 110.0f;
+					ImGui::SetNextWindowSize(ImVec2(ImGui::GetContentRegionMax().x - 100.0f, ImGui::GetContentRegionMax().y - 100.0f));
+
+					if (ImGui::BeginPopupModal("Annulation de folio##AnnulationFolio", NULL, ImGuiWindowFlags_NoResize))
+					{
+						if (ImGui::BeginTable("##tableAnnulationFolio", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 30.0f)))
+						{
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (ImGuiAl::Button(u8"Valider le choix des folio(s) à annuler", (!isGenereMiniature && !isLoadingMiniature), ImVec2(-1.0f, 30.0f)))
+							{
+								MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+								glDeleteTextures(1, &mApercuTexture.my_image_texture);
+								for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
+									glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
+								ImGui::CloseCurrentPopup();
+
+							}
+							ImGui::PopStyleVar();
+
+							ImGui::TableSetColumnIndex(1);
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (ImGuiAl::Button(u8"Ne pas annuler de folio", true, ImVec2(-1.0f, 30.0f)))
+							{
+								MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+								glDeleteTextures(1, &mApercuTexture.my_image_texture);
+								for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
+									glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
+
+								ImGui::CloseCurrentPopup();
+							}
+							ImGui::PopStyleVar();
+							ImGui::EndTable();
+						}
+						if (isGenereMiniature || isLoadingMiniature)
+						{
+							//progress
+							if (isGenereMiniature)
+							{
+								//GET NBFiles
+								if (tmrGenereMiniature.get_elapsed_ms() > 2000)
+								{
+									tmrGenereMiniature.start();
+									{
+										try
+										{
+											auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOut);
+											GenereMiniaturefileCount = std::count_if(
+												begin(dirIter),
+												end(dirIter),
+												[](auto& entry) { return entry.is_regular_file(); }
+											);								//
+										}
+										catch (const std::exception& e)
+										{
+											MY_TRACE("Exception a la ligne:  %s", e.what());
+										}
+									}
+									{
+										try
+										{
+											auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOutMini);
+											GenereMiniaturefileCount += std::count_if(
+												begin(dirIter),
+												end(dirIter),
+												[](auto& entry) { return entry.is_regular_file(); }
+											);								//
+										}
+										catch (const std::exception& e)
+										{
+											MY_TRACE("Exception a la ligne:  %s", e.what());
+										}
+									}
+								}
+								ImGui::Text(u8"Génération apercu :");
+								ImGui::SameLine();
+								std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", (GenereMiniaturefileCount / 2));
+								float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)(GenereMiniaturefileCount / 2)) / 100.0f;
+								ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
+							}
+							else
+							{
+								ImGui::Text(u8"Génération apercu :");
+								ImGui::SameLine();
+								std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", vecMediaBox.size());
+								ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+							}
+							if (isLoadingMiniature && !isGenereMiniature)
+							{
+								ImGui::Text(u8"Miniatures chargées en mémoire : ");
+								ImGui::SameLine();
+								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", CompteLoading);
+								float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)CompteLoading) / 100.0f;
+								ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
+								bool AllDone = true;
+								int CasseLoading = 0;
+								for (size_t iDtex = 0; iDtex < vecListeTexture.size(); iDtex++)
+								{
+									if (!vecListeTexture[iDtex].my_image_success_loading)
+									{
+										AllDone = false;
+										int my_image_width = 0;
+										int my_image_height = 0;
+										GLuint my_image_texture = 0;
+										vecListeTexture[iDtex].my_image_success_loading = LoadTextureFromFile(vecListeTexture[iDtex].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+										vecListeTexture[iDtex].my_image_width = my_image_width;
+										vecListeTexture[iDtex].my_image_height = my_image_height;
+										vecListeTexture[iDtex].my_image_texture = my_image_texture;
+										CompteLoading++;
+										CasseLoading++;
+										if (CasseLoading > 60)
+											break;
+									}
+								}
+								if (AllDone)
+								{
+									isLoadingMiniature = false;
+									//On precharge la premiere image
+									int my_image_width = 0;
+									int my_image_height = 0;
+									GLuint my_image_texture = 0;
+									mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[0].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+									mApercuTexture.my_image_width = my_image_width;
+									mApercuTexture.my_image_height = my_image_height;
+									mApercuTexture.my_image_texture = my_image_texture;
+									MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE":"FALSE");
+								}
+							}
+							else if (isLoadingMiniature && isGenereMiniature)
+							{
+								ImGui::Text(u8"Miniatures chargées en mémoire : ");
+								ImGui::SameLine();
+								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", 0);
+								ImGui::ProgressBar(0.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+							}
+							else
+							{
+								ImGui::Text(u8"Miniatures chargées en mémoire  : ");
+								ImGui::SameLine();
+								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", vecMediaBox.size());
+								ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+							}
+						}
+
+						auto GG2 = ImGui::GetContentRegionMax().y - 110.0f;
+						if (!isLoadingMiniature && !isGenereMiniature)
+							if (ImGui::BeginTable("##tablePreview", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 70.0f)))
+							{
+								ImGui::TableSetupColumn("Actions##Actions", ImGuiTableColumnFlags_WidthStretch, 0);
+								ImGui::TableSetupColumn("Image##Image", ImGuiTableColumnFlags_WidthFixed, 700.0f, 1);
+								ImGui::TableNextRow();
+								ImGui::TableSetColumnIndex(0);
+								if ((!isGenereMiniature && !isLoadingMiniature))
+								{
+									ImGui::TableNextRow();
+									ImGui::TableSetColumnIndex(0);
+									if (ImGui::BeginTable("##tableCKBOX", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y -30.0f /*- 100.0f*/)))
+									{
+										ImGui::TableSetupColumn("ckb##__ckb", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+										ImGui::TableNextRow();
+										ImGui::TableSetColumnIndex(0);
+										int  DummyCount = 0;
+										for (size_t colLs = 0; colLs < vecListeTexture.size(); colLs++)
+										{
+											ImGui::Checkbox(fmt::format(u8"##Page {}", colLs).c_str(), &FolioProcedureAAnnuler[colLs]);
+											ImGui::SameLine();
+											const bool mSelected = false;
+											//ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 8.0f);
+											bool InfoIsItemVisible = ImGui::IsItemVisible();
+											if (InfoIsItemVisible)
+											{
+												if (ImGui::Selectable(fmt::format("##selec{}", colLs).c_str(), mSelected, ImGuiSelectableFlags_None,ImVec2(0.0f,56.0f)))
+												{
+													if (colLs == MiniatureSelectionnee)
+													{
+														//Deja chargee
+													}
+													else
+													{
+														//On doit chargée
+														MiniatureSelectionnee = colLs;
+														MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+														glDeleteTextures(1, &mApercuTexture.my_image_texture);
+														int my_image_width = 0;
+														int my_image_height = 0;
+														GLuint my_image_texture = 0;
+														mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[MiniatureSelectionnee].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+														mApercuTexture.my_image_width = my_image_width;
+														mApercuTexture.my_image_height = my_image_height;
+														mApercuTexture.my_image_texture = my_image_texture;
+														MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
+													}
+												}
+												ImGui::SameLine();
+												ImGui::Image((void*)(intptr_t)vecListeTexture[colLs].my_image_texture, ImVec2(vecListeTexture[colLs].my_image_width, vecListeTexture[colLs].my_image_height));
+												ImGui::SameLine();
+	#ifdef NDEBUG
+												ImGui::Text(fmt::format(u8"Page {}", colLs + 1).c_str());
+	#else
+												ImGui::Text(fmt::format(u8"Page {} (GluID {})", colLs + 1, to_string(vecListeTexture[colLs].my_image_texture)).c_str());
+	#endif // NDEBUG
+											}
+											else
+											{
+												DummyCount++;
+												ImGui::Dummy(ImVec2(-1.0f,64.0f));
+											}
+
+										}
+										//MY_MSG("Nombre Dummy = %d", DummyCount);
+										ImGui::EndTable();
+									}
+									ImGui::TableSetColumnIndex(1);
+#ifdef NDEBUG
+									ImGui::Text(fmt::format(u8"Apercu de la page {}", MiniatureSelectionnee + 1).c_str());
+#else
+									ImGui::Text(fmt::format(u8"Apercu de la page {} (GluID {})", MiniatureSelectionnee + 1, to_string(mApercuTexture.my_image_texture)).c_str());
+#endif // NDEBUG
+									if (ImGui::BeginTable("##tableMaxPV", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 30.0f /*- 100.0f*/)))
+									{
+										ImGui::TableSetupColumn("MaxPV##__mxPV", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+										ImGui::TableNextRow();
+										ImGui::TableSetColumnIndex(0);
+										ImGui::Image((void*)(intptr_t)mApercuTexture.my_image_texture, ImVec2(mApercuTexture.my_image_width, mApercuTexture.my_image_height));
+										ImGui::EndTable();
+									}
+								}
 
 
 								ImGui::EndTable();
 							}
+						ImGui::EndPopup();
 					}
 
 					ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
@@ -1316,13 +1793,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								if (ImGui::Selectable(string(u8"Supprimer la couleur '" + ListeCouleur[PressedSelectable].NomCouleur + "'").c_str()))
 								{
 									ListeCouleur.erase(ListeCouleur.begin() + PressedSelectable);
-									OutputDebugStringA("Suppression de ");
-									OutputDebugStringA(to_string(PressedSelectable).c_str());
-									OutputDebugStringA("\n");
+									MY_MSG("Suppression de %d", PressedSelectable);
 								}
 							if (ImGui::Selectable(u8"Annuler"))
 							{
-								OutputDebugStringA("Annuler");
+								MY_MSG("Annuler suppression de couleur %d", PressedSelectable);
 							}
 							ImGui::EndPopup();
 						}
@@ -1406,89 +1881,89 @@ Programme sous licence GPL 3
 
 ## Les librairies suivantes sont utilisés :
   * [Simple Directmedia Layer : SDL 2](https://www.libsdl.org/index.php)
-    Librairie de rendu graphique OpenGL 2/3.
-    [Licence 'Zlib licence'](https://www.zlib.net/zlib_license.html).
+	Librairie de rendu graphique OpenGL 2/3.
+	[Licence 'Zlib licence'](https://www.zlib.net/zlib_license.html).
   * [Dear IMGui](https://github.com/ocornut/imgui)
-    Librairie d'interface utilisateur C++.
-    [Licence 'MIT'](https://raw.githubusercontent.com/ocornut/imgui/master/LICENSE.txt).
+	Librairie d'interface utilisateur C++.
+	[Licence 'MIT'](https://raw.githubusercontent.com/ocornut/imgui/master/LICENSE.txt).
   * [Wintoast](https://github.com/mohabouje/WinToast)
-    Librairie pour gestion de notification Windows.
-    [Licence MIT](https://raw.githubusercontent.com/mohabouje/WinToast/master/LICENSE.txt).
-  * [PoDoFo Version 0.96](http://podofo.sourceforge.net)
-    Librairie de lecture /écriture de fichier PDF.
-    [Licence LGPL](http://www.gnu.org/copyleft/lesser.html).
+	Librairie pour gestion de notification Windows.
+	[Licence MIT](https://raw.githubusercontent.com/mohabouje/WinToast/master/LICENSE.txt).
+  * [PoDoFo Version 0.9.7](http://podofo.sourceforge.net)
+	Librairie de lecture /écriture de fichier PDF.
+	[Licence LGPL](http://www.gnu.org/copyleft/lesser.html).
   * [GNU LibICONV / GNU LibCharset](https://www.gnu.org/software/libiconv)
-    Gestion flux utf8 / Unicode.
-    [Licence LGPL](https://en.wikipedia.org/wiki/LGPL).
+	Gestion flux utf8 / Unicode.
+	[Licence LGPL](https://en.wikipedia.org/wiki/LGPL).
   * [LybCrypto et LibSSL {OpenSSL}](https://www.openssl.org/)
-    Librairie pour les fichiers PDF cryptés.
-    [Licence Apache 2.0](https://www.openssl.org/source/license.html).
+	Librairie pour les fichiers PDF cryptés.
+	[Licence Apache 2.0](https://www.openssl.org/source/license.html).
   * [LibIDN 2](https://gitlab.com/libidn/libidn2)
-    Gestion flux utf8 / Unicode.
-    [Licence LGPL 3](https://gitlab.com/libidn/libidn2/-/raw/master/COPYING.LESSERv3).
+	Gestion flux utf8 / Unicode.
+	[Licence LGPL 3](https://gitlab.com/libidn/libidn2/-/raw/master/COPYING.LESSERv3).
   * [XXHash](https://github.com/Cyan4973/xxHash)
-    Librairie de Hashing.
-    [Licence 'BSD 2-Clause License'](https://raw.githubusercontent.com/Cyan4973/xxHash/dev/LICENSE).
+	Librairie de Hashing.
+	[Licence 'BSD 2-Clause License'](https://raw.githubusercontent.com/Cyan4973/xxHash/dev/LICENSE).
   * [Google Brotli](https://github.com/google/brotli/)
-    Librairie de compression/décompression.
-    [Licence MIT](https://raw.githubusercontent.com/google/brotli/master/LICENSE).
+	Librairie de compression/décompression.
+	[Licence MIT](https://raw.githubusercontent.com/google/brotli/master/LICENSE).
   * [BZip 2](http://www.bzip.org/)
-    Librairie de compression/décompression.
-    [Licence BSD-like](https://en.wikipedia.org/wiki/BSD-like_license).
+	Librairie de compression/décompression.
+	[Licence BSD-like](https://en.wikipedia.org/wiki/BSD-like_license).
   * [LZMA](http://www.7-zip.org/sdk.html)
-    Librairie de compression/décompression.
-    [domaine public](http://www.7-zip.org/sdk.html).
+	Librairie de compression/décompression.
+	[domaine public](http://www.7-zip.org/sdk.html).
   * [Zlib](https://www.zlib.net/)
-    Librairie de compression/décompression.
-    [Licence Zlib](https://www.zlib.net/zlib_license.html).
+	Librairie de compression/décompression.
+	[Licence Zlib](https://www.zlib.net/zlib_license.html).
   * [Zstd](https://github.com/facebook/zstd)
-    Librairie de compression/décompression.
-    [Licence BSD](https://raw.githubusercontent.com/facebook/zstd/dev/LICENSE).
+	Librairie de compression/décompression.
+	[Licence BSD](https://raw.githubusercontent.com/facebook/zstd/dev/LICENSE).
   * [Freetype](https://www.freetype.org/)
-    Librairie de rendu de police d'écran.
-    [Licence 'Freetype Licence'](https://gitlab.freedesktop.org/freetype/freetype/-/blob/master/docs/FTL.TXT).
+	Librairie de rendu de police d'écran.
+	[Licence 'Freetype Licence'](https://gitlab.freedesktop.org/freetype/freetype/-/blob/master/docs/FTL.TXT).
   * [LibJPEG](http://libjpeg.sourceforge.net/)
-    Gestion de fichier Jpeg.
-    [Licence BSD-Like](https://en.wikipedia.org/wiki/Libjpeg).
+	Gestion de fichier Jpeg.
+	[Licence BSD-Like](https://en.wikipedia.org/wiki/Libjpeg).
   * [TurboJPEG](https://github.com/libjpeg-turbo/libjpeg-turbo)
-    Gestion de fichier Jpeg.
-    [Licence Zlib](https://opensource.org/licenses/Zlib).
+	Gestion de fichier Jpeg.
+	[Licence Zlib](https://opensource.org/licenses/Zlib).
   * [LibPNG16](http://www.libpng.org/pub/png/libpng.html)
-    Gestion de fichier PNG Portable Network Graphics.
-    [Licence Open Source](http://www.libpng.org/pub/png/src/libpng-LICENSE.txt).
+	Gestion de fichier PNG Portable Network Graphics.
+	[Licence Open Source](http://www.libpng.org/pub/png/src/libpng-LICENSE.txt).
   * [Tiff](https://gitlab.com/libtiff/libtiff)
-    Gestion de fichier Tiff.
-    Licence domaine public.
+	Gestion de fichier Tiff.
+	Licence domaine public.
   * [FMT](https://github.com/fmtlib/fmt/)
-    Librairie de formatage de texte.
-    [Licence 'MIT'](https://raw.githubusercontent.com/fmtlib/fmt/master/LICENSE.rst).
+	Librairie de formatage de texte.
+	[Licence 'MIT'](https://raw.githubusercontent.com/fmtlib/fmt/master/LICENSE.rst).
 
 ## Les executables suivants sont utilisés :
   * [Poppler PDFToPPM](https://poppler.freedesktop.org)
-    Transformation de PDF en image.
-    [Licence 'GPL3'](https://gitlab.freedesktop.org/poppler/poppler#history-and-gpl-licensing).
+	Transformation de PDF en image.
+	[Licence 'GPL3'](https://gitlab.freedesktop.org/poppler/poppler#history-and-gpl-licensing).
   * Compacte et Répare (Outil maison)
-    Compresse et répare des fichiers PDF corrompus ou trop volumineux.
-    [Licence 'AGPL'](https://itextpdf.com/en/how-buy/agpl-license).
+	Compresse et répare des fichiers PDF corrompus ou trop volumineux.
+	[Licence 'AGPL'](https://itextpdf.com/en/how-buy/agpl-license).
 
 ## Les codes suivants sont utilisés :
   * [imgui_markdown](https://github.com/juliettef/imgui_markdown/)
-    Librairie d'affichage de texte au format Markdown.
-    [Licence 'zlib License'](https://raw.githubusercontent.com/juliettef/imgui_markdown/master/License.txt/).
+	Librairie d'affichage de texte au format Markdown.
+	[Licence 'zlib License'](https://raw.githubusercontent.com/juliettef/imgui_markdown/master/License.txt/).
   * [Obfuscate](https://github.com/adamyaxley/Obfuscate/)
-    Obfuscation de code à la compilation.
-    [Licence 'The Unlicense'](https://raw.githubusercontent.com/adamyaxley/Obfuscate/master/LICENSE/).
+	Obfuscation de code à la compilation.
+	[Licence 'The Unlicense'](https://raw.githubusercontent.com/adamyaxley/Obfuscate/master/LICENSE/).
   * [PLF Nanotimer](https://github.com/mattreecebentley/plf_nanotimer/)
-    Timer mesurant les nanosecondes.
-    [Licence 'Zlib Licence'](https://en.wikipedia.org/wiki/Zlib_License/).
+	Timer mesurant les nanosecondes.
+	[Licence 'Zlib Licence'](https://en.wikipedia.org/wiki/Zlib_License/).
 
 ## Les polices suivantes sont utilisées :
   * [Droid Sans par Steve Matteson](https://en.wikipedia.org/wiki/Steve_Matteson)
-    [Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
+	[Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
 
 ## Les icones suivants sont utilisés :
   * [Stamp Icon par DesignContest](http://www.designcontest.com/)
-    [Licence 'CC Attribution 4.0'](https://creativecommons.org/licenses/by/4.0/).
+	[Licence 'CC Attribution 4.0'](https://creativecommons.org/licenses/by/4.0/).
 )";
 					static ImGui::MarkdownConfig mdConfig;
 					mdConfig.linkCallback = [](ImGui::MarkdownLinkCallbackData data_)
@@ -1500,9 +1975,9 @@ Programme sous licence GPL 3
 						}
 					};
 					mdConfig.linkIcon = ICON_FA_LINK;
-					mdConfig.headingFormats[0] = { MYFont14bold, false/*Sousligné*/ };//H1 #
-					mdConfig.headingFormats[1] = { MYFont14bold, true/*Sousligné*/ }; //H2 ##
-					mdConfig.headingFormats[2] = { MYFont20, false/*Sousligné*/ };    //H3 ###
+					mdConfig.headingFormats[0] = { MYFont14bold, false };//H1 #
+					mdConfig.headingFormats[1] = { MYFont14bold, true }; //H2 ##
+					mdConfig.headingFormats[2] = { MYFont20, false };    //H3 ###
 					mdConfig.userData = NULL;
 					if (ImGui::BeginTable("##TableMarkdown", 1, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, height - 2 * ImGui::GetFrameHeightWithSpacing())))
 					{
@@ -1676,6 +2151,16 @@ Programme sous licence GPL 3
 	}
 	SauveParametres();
 	// Cleanup
+	try
+	{
+		uintmax_t resRemove = filesystem::remove_all(CheminTemp);
+		MY_MSG("Sortie, suppression Session avec %d élément(s)", resRemove);
+	}
+	catch (const std::exception& e)
+	{
+		MY_TRACE("Exception a la ligne:  %s", e.what());
+	}
+
 	ImGui_ImplOpenGL2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
@@ -1824,6 +2309,97 @@ bool ChargeParametres(/*bool& _ThemeSombre, char* Tranche0, char* Tranche1, char
 
 	return true;
 }
+
+bool GenereMiniature(int id, int startingPage, int endingPage, std::wstring DocumentPDF) {
+	MY_MSG("Lancement Thread %d [bloc %d-%d]", id, startingPage, endingPage);
+	FileHelper mPopplerFH(CheminPopplerPDFPPM);
+	wstring PathOutputImage = CheminPopplerPDFPPMTempOut + L"\\img_";
+	wstring Parametre = L"-f " + to_wstring(startingPage) + L" -l " + to_wstring(endingPage) + L" -q -r 40 -jpeg -jpegopt quality=75,optimize=y \"" + DocumentPDF + L"\" \"" + PathOutputImage + L"\"";
+	SHELLEXECUTEINFO ShExecInfo = { 0 };
+	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+	ShExecInfo.hwnd = NULL;
+	ShExecInfo.lpVerb = NULL;
+	wstring wFile = mPopplerFH.RetourneCheminComplet();
+	ShExecInfo.lpFile = wFile.c_str();
+	ShExecInfo.lpParameters = Parametre.c_str();
+	wstring wBasePath = mPopplerFH.RetourneDossier(false);
+	ShExecInfo.lpDirectory = wBasePath.c_str();
+	ShExecInfo.nShow = SW_HIDE;
+	ShExecInfo.hInstApp = NULL;
+	ShellExecuteEx(&ShExecInfo);
+	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+	DWORD exitCDE;
+	GetExitCodeProcess(ShExecInfo.hProcess, &exitCDE);
+	CloseHandle(ShExecInfo.hProcess);
+	MY_MSG("Sortie Thread %d [bloc %d-%d] (Code sortie %d)", id, startingPage, endingPage, exitCDE);
+	return true;
+}
+bool GenereMiniatureMIN(int id, int startingPage, int endingPage, std::wstring DocumentPDF) {
+	MY_MSG("Lancement Thread %d [bloc %d-%d]", id, startingPage, endingPage);
+	FileHelper mPopplerFH(CheminPopplerPDFPPM);
+	wstring PathOutputImage = CheminPopplerPDFPPMTempOutMini + L"\\img_";
+	wstring Parametre = L"-f " + to_wstring(startingPage) + L" -l " + to_wstring(endingPage) + L" -q -r 10 -scale-to 64 -jpeg -jpegopt quality=60,optimize=y \"" + DocumentPDF + L"\" \"" + PathOutputImage + L"\"";
+	SHELLEXECUTEINFO ShExecInfo = { 0 };
+	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+	ShExecInfo.hwnd = NULL;
+	ShExecInfo.lpVerb = NULL;
+	wstring wFile = mPopplerFH.RetourneCheminComplet();
+	ShExecInfo.lpFile = wFile.c_str();
+	ShExecInfo.lpParameters = Parametre.c_str();
+	wstring wBasePath = mPopplerFH.RetourneDossier(false);
+	ShExecInfo.lpDirectory = wBasePath.c_str();
+	ShExecInfo.nShow = SW_HIDE;
+	ShExecInfo.hInstApp = NULL;
+	ShellExecuteEx(&ShExecInfo);
+	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+	DWORD exitCDE;
+	GetExitCodeProcess(ShExecInfo.hProcess, &exitCDE);
+	CloseHandle(ShExecInfo.hProcess);
+	MY_MSG("Sortie Thread %d [bloc %d-%d] (Code sortie %d)", id, startingPage, endingPage, exitCDE);
+	return true;
+}
+
+void MyTrace(int line, const char* fileName, const char* msg, ...)
+{
+	FileHelper mFH = FileHelper(string(fileName));
+
+	va_list args;
+	char buffer[256] = { 0 };
+	sprintf_s(buffer, "TRACE: %s(%d) : ", mFH.RetourneNomFichierS().c_str(), line);
+	string mMessage(buffer);
+	/*OutputDebugStringA(buffer);*/
+
+	// retrieve the variable arguments
+	va_start(args, msg);
+	vsprintf_s(buffer, msg, args);
+	mMessage += string(buffer);
+	/*OutputDebugStringA(buffer);
+	*/
+	va_end(args);
+	OutputDebugStringA(mMessage.c_str());
+}
+void MyMsg(int line, const char* fileName, const char* msg, ...)
+{
+	FileHelper mFH = FileHelper(string(fileName));
+
+	va_list args;
+	char buffer[256] = { 0 };
+	sprintf_s(buffer, "MSG: %s(%d) : ", mFH.RetourneNomFichierS().c_str(), line);
+	string mMessage(buffer);
+	/*OutputDebugStringA(buffer);*/
+
+	// retrieve the variable arguments
+	va_start(args, msg);
+	vsprintf_s(buffer, msg, args);
+	mMessage += string(buffer);
+	/*OutputDebugStringA(buffer);
+	*/
+	va_end(args);
+	OutputDebugStringA(mMessage.c_str());
+}
+
 /*
 	https://www.codeproject.com/articles/16678/vista-goodies-in-c-using-the-new-vista-file-dialog
 void CMainDlg::OnFileSave()

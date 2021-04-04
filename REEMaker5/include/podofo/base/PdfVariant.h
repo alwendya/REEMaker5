@@ -436,6 +436,11 @@ class PODOFO_API PdfVariant {
      */
     inline virtual void DelayedLoadImpl();
 
+    /** Called after delayed load
+     *  \param eDataType Detected data type
+     */
+    inline virtual void AfterDelayedLoad( EPdfDataType eDataType );
+
     /**
      * Returns true if delayed loading is disabled, or if it is enabled
      * and loading has completed. External callers should never need to
@@ -514,14 +519,16 @@ class PODOFO_API PdfVariant {
     UVariant     m_Data;
 
     bool         m_bDirty; ///< Indicates if this object was modified after construction
-    bool         m_bImmutable; ///< Indicates if this object maybe modified
+    bool         m_bImmutable; ///< Indicates if this object may be modified
 
 
-    /** Datatype of the variant.
-     *  required to access the correct member of 
-     *  the union UVariant.
+    /** Datatype of the variant, required to access the correct member of the union UVariant.
+     *  The data type is to save RAM space because this class is used in very many instances.
+     *  No fixed-underlying-type enum is used, for pre-C++11 compatibility.
+     *  The type is unsigned because there's no negative value in the enum PdfDataType and
+     *  to cleanly enable the ePdfDataType_Unknown value to be 0xff (as sentinel value).
      */
-    pdf_int8 m_eDataType;
+    pdf_uint8 m_eDataType;
 
     // No touchy. Only for use by PdfVariant's internal tracking of the delayed
     // loading state. Use DelayedLoadDone() to test this if you need to.
@@ -562,6 +569,7 @@ inline void PdfVariant::DelayedLoad() const
 #if defined(PODOFO_EXTRA_CHECKS)
         m_bDelayedLoadInProgress = false;
 #endif
+        const_cast<PdfVariant*>(this)->AfterDelayedLoad( ( EPdfDataType )m_eDataType );
     }
 }
 
@@ -938,6 +946,15 @@ void PdfVariant::DelayedLoadImpl()
     // Default implementation of virtual void DelayedLoadImpl() throws, since delayed
     // loading should not be enabled except by types that support it.
     PODOFO_RAISE_ERROR( ePdfError_InternalLogic );
+}
+
+// -----------------------------------------------------
+//
+// -----------------------------------------------------
+void PdfVariant::AfterDelayedLoad( EPdfDataType eDataType )
+{
+    ( void )eDataType;
+    // Do nothing
 }
 
 // -----------------------------------------------------

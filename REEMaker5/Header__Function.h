@@ -10,6 +10,16 @@ public:
 	}
 };
 SpinLock sLock;
+size_t NombreCPU()
+{
+    SYSTEM_INFO systemInfo;
+    GetNativeSystemInfo(&systemInfo);
+    if (systemInfo.dwNumberOfProcessors == NULL)
+        return 2;
+    else
+        return systemInfo.dwNumberOfProcessors;
+
+}
 
 size_t wsplit(const std::wstring& txt, std::vector<std::wstring>& strs, wchar_t ch)
 {
@@ -90,6 +100,7 @@ class FileHelper
 public:
     FileHelper();
     FileHelper(std::wstring);
+    FileHelper(std::string);
     void Initialise(std::wstring);
     std::wstring RetourneNomFichier();
     std::string RetourneNomFichierS();
@@ -164,6 +175,14 @@ private:
 FileHelper::FileHelper(std::wstring Fichier)
 {
     mNomFichier = Fichier;
+    mNomFichierLPATH = ToLengthExtendedPathName(Fichier);
+    mEstDossier = isFolder(mNomFichierLPATH.c_str());
+    mNomFichierS = ConvertWideToANSI(mNomFichier);
+    mNomFichierLPATHS = ConvertWideToANSI(mNomFichierLPATH);
+}
+FileHelper::FileHelper(std::string Fichier)
+{
+    mNomFichier = ConvertAnsiToWide(Fichier);
     mNomFichierLPATH = ToLengthExtendedPathName(Fichier);
     mEstDossier = isFolder(mNomFichierLPATH.c_str());
     mNomFichierS = ConvertWideToANSI(mNomFichier);

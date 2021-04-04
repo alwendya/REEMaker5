@@ -10,12 +10,13 @@
 
 #define PODOFO_VERSION_MAJOR 0
 #define PODOFO_VERSION_MINOR 9
-#define PODOFO_VERSION_PATCH 6
+#define PODOFO_VERSION_PATCH 7
 
 /* PoDoFo configuration options */
 #define PODOFO_MULTI_THREAD
 
 /* somewhat platform-specific headers */
+#define PODOFO_HAVE_UNIQUE_PTR 1
 /* #undef PODOFO_HAVE_STRINGS_H */
 /* #undef PODOFO_HAVE_ARPA_INET_H */
 #define PODOFO_HAVE_WINSOCK2_H 1

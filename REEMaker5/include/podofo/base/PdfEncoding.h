@@ -226,7 +226,7 @@ class PODOFO_API PdfEncoding {
  private:
     int     m_nFirstChar;   ///< The first defined character code
     int     m_nLastChar;    ///< The last defined character code
-    PdfObject* m_pToUnicode;    ///< Pointer to /ToUnicode object, if any
+    const PdfObject* m_pToUnicode;    ///< Pointer to /ToUnicode object, if any
  protected:
     std::map<pdf_utf16be, pdf_utf16be> m_toUnicode;
                
@@ -752,9 +752,15 @@ class PODOFO_API PdfWin1250Encoding : public PdfWinAnsiEncoding
      */
     PdfWin1250Encoding()
     {
+        m_id = "Win1250Encoding";
     }
 
  protected:
+
+    virtual const PdfName & GetID() const
+    {
+        return m_id;
+    }
 
     /** Gets a table of 256 short values which are the 
      *  big endian unicode code points that are assigned
@@ -769,6 +775,7 @@ class PODOFO_API PdfWin1250Encoding : public PdfWinAnsiEncoding
 
  private:
     static const pdf_utf16be s_cEncoding[256]; ///< conversion table from Win1250Encoding to UTF16
+    PdfName m_id;
 };
 
 /**
@@ -782,9 +789,15 @@ class PODOFO_API PdfIso88592Encoding : public PdfWinAnsiEncoding
      */
     PdfIso88592Encoding()
     {
+        m_id = "Iso88592Encoding";
     }
 
  protected:
+
+    virtual const PdfName & GetID() const
+    {
+        return m_id;
+    }
 
     /** Gets a table of 256 short values which are the 
      *  big endian unicode code points that are assigned
@@ -799,6 +812,7 @@ class PODOFO_API PdfIso88592Encoding : public PdfWinAnsiEncoding
 
  private:
     static const pdf_utf16be s_cEncoding[256]; ///< conversion table from Iso88592Encoding to UTF16
+    PdfName m_id;
 };
 
 }; /* namespace PoDoFo */
