@@ -42,6 +42,6 @@
 #include <plf_nanotimer.h>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
-#define PODOFO_HAVE_JPEG_LIB
+//#define PODOFO_HAVE_JPEG_LIB
 #include <podofo/podofo.h>
 #include <ctpl.h>

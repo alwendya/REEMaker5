@@ -1,6 +1,8 @@
 ﻿#include "Header_Main.h"
 #include "Header__Font.h"
 #include "Header__Function.h"
+#include "Header__FileHelper.h"
+#include "Header__PdgHelper.h"
 #include "Header__ImGUI_addon.h"
 #include "Header__CryptoZstd.h"
 #include "Header__WinToast.h"
@@ -54,6 +56,8 @@ static std::string MessagePercentOPENCours("12 %");
 static wstring CheminPDG(L"");
 static wstring CheminBASE(L"");
 static wstring CheminFont(L"");
+static string sCheminFontDroid("");
+static string sCheminFontDroidBold("");
 static wstring CheminCompacteRepare(L"");
 static wstring CheminPopplerPDFPPM(L"");
 static wstring CheminPopplerPDFPPMTempOut(L"");
@@ -63,10 +67,10 @@ static wstring CheminTemp(L"");
 static vector<PoDoFo::PdfRect> vecMediaBox;
 static vector<int> vecRotation;
 static vector<string> ListePDGModele;
-static vector<wstring> PDGouvert;
+//static vector<wstring> PDGouvert;
 static string pdgClassSEED = "";
-static char PDGouvertChar[9999][1024];
-static bool PDGouvertBool[9999];
+//static char PDGouvertChar[9999][1024];
+//static bool PDGouvertBool[9999];
 static int item_current_vPDG = 0;
 static char  txtSpinner[2] = "\0";
 static char NomSite[32];
@@ -80,6 +84,7 @@ static bool tabPageDeGarde = true;
 static bool tabParametre = true;
 static int radioTotalPartiel = 0;
 static bool FolioProcedureAAnnuler[9999];
+static bool FolioProcedureAAnnulerBKUP[9999];
 static bool isGenereMiniature = false;
 static bool isLoadingMiniature = false;
 static int NombreCoeur = 2;
@@ -119,6 +124,8 @@ TextureSTB mApercuTexture;
 vector<Couleur> ListeCouleur;
 static float sListeCouleurTranche[10][4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
+PDGHelper mPDGHelper;
+
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -139,11 +146,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of(L"\\") + 1);
 
 	CheminPDG = CheminBASE + L"PDG_modele\\";
-	CheminFont = CheminBASE + L"REEMAKER.ttf";//J'utilise Droid Sans pour des histoires de droits
+	CheminFont = CheminBASE + L"DroidSans.ttf";//J'utilise Droid Sans pour des histoires de droits
+	sCheminFontDroid = fileHELPER.ConvertWideToANSI(CheminBASE) + "DroidSans.ttf";
+	sCheminFontDroidBold = fileHELPER.ConvertWideToANSI(CheminBASE) + "DroidSans-Bold.ttf";
 	CheminCompacteRepare = CheminBASE + L"CompRepare\\CompacteRepareCommandLine.exe";
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
 
 	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
+
+	//TODO
+	/*
+	* Test présence tout fichier + page de garde de base
+	* Sinon
+	* Message pour re-installer REEMaker 5
+	*/
+
+
 	try
 	{
 		filesystem::create_directories(CheminTemp);
@@ -175,23 +193,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	else
 	{
-		PDGouvert.clear();
-		for (size_t i = 0; i < 9999; i++)
-			PDGouvertChar[i][0] = '\0';
-		for (size_t i = 0; i < 9999; i++)
-			PDGouvertBool[i] = false;
-		{
-			//Ouverture du fichier pour lecture
-			wstring CheminPDGModele = CheminPDG + fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]);
-			wifstream input_file(CheminPDGModele);
-			wstring line;
-			while (getline(input_file, line)) {
-				if (line.size() > 2)
-					if (line.substr(0, 2) != L"::")
-						PDGouvert.push_back(line);
-			}
-			input_file.close();
-		}
+		mPDGHelper.SetBaseModelePath(CheminPDG);
+		mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
+		TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
+
+
+
+
 	}
 
 
@@ -285,7 +293,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	* Main loop
 	*/
 
-
 	bool done = false;
 	while (!done)
 	{
@@ -295,8 +302,77 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			ImGui_ImplSDL2_ProcessEvent(&event);
 			if (event.type == SDL_QUIT)
 				done = true;
-			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
-				done = true;
+			if (event.type == SDL_WINDOWEVENT) {
+				switch (event.window.event) {
+				case SDL_WINDOWEVENT_CLOSE:
+					if (event.window.windowID == SDL_GetWindowID(window))
+					{
+						MY_MSG("MSG: Window %d closed", event.window.windowID);
+						done = true;
+					}
+					break;
+				case SDL_WINDOWEVENT_SHOWN:
+					MY_MSG("MSG: Window %d shown", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_HIDDEN:
+					MY_MSG("MSG: Window %d hidden", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_EXPOSED:
+					MY_MSG("MSG: Window %d exposed", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_MOVED:
+					MY_MSG("MSG: Window %d moved to %d,%d",
+						event.window.windowID, event.window.data1,
+						event.window.data2);
+					break;
+				case SDL_WINDOWEVENT_RESIZED:
+					MY_MSG("MSG: Window %d resized to %dx%d",
+						event.window.windowID, event.window.data1,
+						event.window.data2);
+					break;
+				case SDL_WINDOWEVENT_SIZE_CHANGED:
+					MY_MSG("MSG: Window %d size changed to %dx%d",
+						event.window.windowID, event.window.data1,
+						event.window.data2);
+					break;
+				case SDL_WINDOWEVENT_MINIMIZED:
+					MY_MSG("MSG: Window %d minimized", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_MAXIMIZED:
+					MY_MSG("MSG: Window %d maximized", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_RESTORED:
+					MY_MSG("MSG: Window %d restored", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_ENTER:
+					MY_MSG("MSG: Mouse entered window %d",
+						event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_LEAVE:
+					MY_MSG("MSG: Mouse left window %d", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_FOCUS_GAINED:
+					MY_MSG("MSG: Window %d gained keyboard focus",
+						event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_FOCUS_LOST:
+					MY_MSG("MSG: Window %d lost keyboard focus",
+						event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_TAKE_FOCUS:
+					MY_MSG("MSG: Window %d is offered a focus", event.window.windowID);
+					break;
+				case SDL_WINDOWEVENT_HIT_TEST:
+					MY_MSG("MSG: Window %d has a special hit test", event.window.windowID);
+					break;
+				default:
+					MY_MSG("MSG: Window %d got unknown event %d",
+						event.window.windowID, event.window.event);
+					break;
+				}
+			}
+
+
 		}
 		ImGui_ImplOpenGL2_NewFrame();
 		ImGui_ImplSDL2_NewFrame(window);
@@ -463,14 +539,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 													//PoDoFo::PdfString podofoDate("");
 													//documentSource.GetInfo()->GetCreationDate().ToString(podofoDate);
 													string sDATETIME = fmt::format(u8"{:%Y/%m/%d %H:%M:%S}", fmt::localtime(documentSource.GetInfo()->GetCreationDate().GetTime()));
-													pdfDETAIL = fmt::format(u8"Auteur : {}, Crée par : {}, Le {}",documentSource.GetInfo()->GetAuthor().GetStringUtf8(), documentSource.GetInfo()->GetCreator().GetStringUtf8(), sDATETIME);
+													pdfDETAIL = fmt::format(u8"Auteur : {}, Crée par : {}, Le {}", documentSource.GetInfo()->GetAuthor().GetStringUtf8(), documentSource.GetInfo()->GetCreator().GetStringUtf8(), sDATETIME);
 												}
 												catch (const std::exception&)
 												{
 													pdfDETAIL = "Impossible d'avoir les informations du documents...";
 												}
 
-												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo [{}, {}]", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024,PdfVErsionToString, pdfDETAIL);
+												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo [{}, {}]", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024, PdfVErsionToString, pdfDETAIL);
 												memcpy_s(strCHEMINPROCEDURE, CheminPDForiginal.size(), &CheminPDForiginal[0], CheminPDForiginal.size());
 												strCHEMINPROCEDURE[CheminPDForiginal.size()] = '\0';
 												this_thread::sleep_for(500ms);
@@ -500,6 +576,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 											AfficheAnnuleFolioProcedure = false;
 											AfficheFolioProcedure = false;
 											AfficheFenetreSpinner = false;
+											for (size_t zz = 0; zz < 9999; zz++)
+											{
+												FolioProcedureAAnnuler[zz] = false;
+											}
 										}//123
 									);
 									t.detach();
@@ -659,6 +739,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							CompteLoading = 0;
 							tmrGenereMiniature.start();
 							GenereMiniaturefileCount = 0;
+							for (size_t zz = 0; zz < 9999; zz++)
+							{
+								FolioProcedureAAnnulerBKUP[zz] = FolioProcedureAAnnuler[zz];
+							}
 							ImGui::OpenPopup("Annulation de folio##AnnulationFolio");
 							//THREAD 
 							std::thread tTHREAD([]() {
@@ -1347,7 +1431,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								ImGui::EndTable();
 							}
 					}
-					auto GG1 = ImGui::GetContentRegionMax().y - 110.0f;
 					ImGui::SetNextWindowSize(ImVec2(ImGui::GetContentRegionMax().x - 100.0f, ImGui::GetContentRegionMax().y - 100.0f));
 
 					if (ImGui::BeginPopupModal("Annulation de folio##AnnulationFolio", NULL, ImGuiWindowFlags_NoResize))
@@ -1359,6 +1442,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 							if (ImGuiAl::Button(u8"Valider le choix des folio(s) à annuler", (!isGenereMiniature && !isLoadingMiniature), ImVec2(-1.0f, 30.0f)))
 							{
+								for (size_t zz = 0; zz < 9999; zz++)//On transfert cette fenetre dans l'original
+									FolioProcedureAAnnuler[zz] = FolioProcedureAAnnulerBKUP[zz];
 								MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
 								glDeleteTextures(1, &mApercuTexture.my_image_texture);
 								for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
@@ -1473,7 +1558,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 									mApercuTexture.my_image_width = my_image_width;
 									mApercuTexture.my_image_height = my_image_height;
 									mApercuTexture.my_image_texture = my_image_texture;
-									MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE":"FALSE");
+									MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
 								}
 							}
 							else if (isLoadingMiniature && isGenereMiniature)
@@ -1492,9 +1577,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							}
 						}
 
-						auto GG2 = ImGui::GetContentRegionMax().y - 110.0f;
 						if (!isLoadingMiniature && !isGenereMiniature)
-							if (ImGui::BeginTable("##tablePreview", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 70.0f)))
+						{
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (ImGui::Button(u8"Tout sélectionner"))
+								for (size_t ze = 0; ze < 9999; ze++)
+									FolioProcedureAAnnulerBKUP[ze] = true;
+							ImGui::SameLine();
+							if (ImGui::Button(u8"Tout désélectionner"))
+								for (size_t ze = 0; ze < 9999; ze++)
+									FolioProcedureAAnnulerBKUP[ze] = false;
+							ImGui::PopStyleVar();
+							if (ImGui::BeginTable("##tablePreview", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 100.0f)))
 							{
 								ImGui::TableSetupColumn("Actions##Actions", ImGuiTableColumnFlags_WidthStretch, 0);
 								ImGui::TableSetupColumn("Image##Image", ImGuiTableColumnFlags_WidthFixed, 700.0f, 1);
@@ -1504,7 +1598,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								{
 									ImGui::TableNextRow();
 									ImGui::TableSetColumnIndex(0);
-									if (ImGui::BeginTable("##tableCKBOX", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y -30.0f /*- 100.0f*/)))
+									if (ImGui::BeginTable("##tableCKBOX", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 30.0f /*- 100.0f*/)))
 									{
 										ImGui::TableSetupColumn("ckb##__ckb", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
 										ImGui::TableNextRow();
@@ -1512,14 +1606,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										int  DummyCount = 0;
 										for (size_t colLs = 0; colLs < vecListeTexture.size(); colLs++)
 										{
-											ImGui::Checkbox(fmt::format(u8"##Page {}", colLs).c_str(), &FolioProcedureAAnnuler[colLs]);
+											ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+											ImGui::Checkbox(fmt::format(u8"##Page {}", colLs).c_str(), &FolioProcedureAAnnulerBKUP[colLs]);
 											ImGui::SameLine();
 											const bool mSelected = false;
-											//ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 8.0f);
+
 											bool InfoIsItemVisible = ImGui::IsItemVisible();
 											if (InfoIsItemVisible)
 											{
-												if (ImGui::Selectable(fmt::format("##selec{}", colLs).c_str(), mSelected, ImGuiSelectableFlags_None,ImVec2(0.0f,56.0f)))
+												if (ImGui::Selectable(fmt::format("##selec{}", colLs).c_str(), mSelected, ImGuiSelectableFlags_None, ImVec2(0.0f, 56.0f)))
 												{
 													if (colLs == MiniatureSelectionnee)
 													{
@@ -1543,21 +1638,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 												}
 												ImGui::SameLine();
 												ImGui::Image((void*)(intptr_t)vecListeTexture[colLs].my_image_texture, ImVec2(vecListeTexture[colLs].my_image_width, vecListeTexture[colLs].my_image_height));
+												ImGui::PopStyleVar();
 												ImGui::SameLine();
-	#ifdef NDEBUG
+#ifdef NDEBUG
 												ImGui::Text(fmt::format(u8"Page {}", colLs + 1).c_str());
-	#else
+#else
 												ImGui::Text(fmt::format(u8"Page {} (GluID {})", colLs + 1, to_string(vecListeTexture[colLs].my_image_texture)).c_str());
-	#endif // NDEBUG
+#endif // NDEBUG
 											}
 											else
 											{
+												ImGui::PopStyleVar();
 												DummyCount++;
-												ImGui::Dummy(ImVec2(-1.0f,64.0f));
+												ImGui::Dummy(ImVec2(-1.0f, 64.0f));
 											}
 
 										}
-										//MY_MSG("Nombre Dummy = %d", DummyCount);
 										ImGui::EndTable();
 									}
 									ImGui::TableSetColumnIndex(1);
@@ -1579,6 +1675,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 								ImGui::EndTable();
 							}
+						}
 						ImGui::EndPopup();
 					}
 
@@ -1606,7 +1703,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				if (ImGui::BeginTabItem(ICON_FA_FILE_TEXT_O " Page de garde"))
 				{
-					ImGui::Text("Onglet n°2 : " ICON_FA_BLUETOOTH " " ICON_FA_AMAZON " " ICON_FA_ARROW_LEFT " " ICON_FA_CIRCLE_THIN " " ICON_FA_CLIPBOARD " " ICON_FA_CODIEPIE);
 					ImGui::Text(u8"Modèle de page de garde : ");
 					ImGui::SameLine();
 					const char* combo_label = ListePDGModele[item_current_vPDG].c_str();  // Label to preview before opening the combo (technically it could be anything)
@@ -1618,22 +1714,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							if (ImGui::Selectable(ListePDGModele[n].c_str(), is_selected))
 							{
 								item_current_vPDG = n;
-								PDGouvert.clear();
-								for (size_t i = 0; i < 9999; i++)
-									PDGouvertChar[i][0] = '\0';
-								for (size_t i = 0; i < 9999; i++)
-									PDGouvertBool[i] = false;
 								{
 									//Ouverture du fichier pour lecture
 									wstring CheminPDGModele = CheminPDG + fileHELPER.ConvertUtf8ToWide(ListePDGModele[item_current_vPDG]);
-									wifstream input_file(CheminPDGModele);
-									wstring line;
-									while (getline(input_file, line)) {
-										if (line.size() > 2)
-											if (line.substr(0, 2) != L"::")
-												PDGouvert.push_back(line);
-									}
-									input_file.close();
+									mPDGHelper.ClearList();
+									mPDGHelper.OpenAndParseConfig(CheminPDGModele);
 								}
 							}
 							if (is_selected)
@@ -1664,69 +1749,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					/*
 					* DEBUT DESSIN DYNAMIQUE PDG
 					*/
-					for (size_t lPDG = 0; lPDG < PDGouvert.size(); lPDG++)
+					if (ImGui::BeginTable("##tablePdgDynamique", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 100.0f)))
 					{
-						wstring firstWord = PDGouvert[lPDG].substr(0, PDGouvert[lPDG].find(L" "));
-						transform(firstWord.begin(), firstWord.end(), firstWord.begin(), ::towlower);
-						if (firstWord == L"demandetexteuneligne")
+						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 350.0f, 0);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 40.0f, 1);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueLibéllé", ImGuiTableColumnFlags_WidthStretch, 2);
+						for (size_t lPDG = 0; lPDG < mPDGHelper.ListeQuestion.size(); lPDG++)
 						{
-							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"', 0);
-							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion + 1);
-							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion + 1);
-							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide + 1);
-							wstring Question = PDGouvert[lPDG].substr(DebutQuestion + 1, FinQuestion - DebutQuestion - 1);
-							wstring Aide = PDGouvert[lPDG].substr(DebutAide + 1, FinAide - DebutAide - 1);
-
-							vector<wstring> mArgument;
-							wsplit(PDGouvert[lPDG].substr(FinAide + 1), mArgument, L' ');
-							if (mArgument.size() > 0)
-								if (mArgument[0] == L"")
-									mArgument.erase(mArgument.begin() + 0);
-							ImGui::SetNextItemWidth(200.0f);
-							ImGui::Text(fileHELPER.ConvertWideToANSI(Question).c_str());
-							ImGui::SameLine();
-							ImGui::InputText(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
-								PDGouvertChar[lPDG], IM_ARRAYSIZE(PDGouvertChar[lPDG]), ImGuiInputTextFlags_None);
-							if (Aide != L"")
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							if (mPDGHelper.ListeQuestion[lPDG].Obligatoire)
 							{
-								ImGui::SameLine();
-								HelpMarker(fileHELPER.ConvertWideToANSI(Aide).c_str());
+								ImGui::TextColored(IMVEC4_COL16(0, 137, 3, 255), ICON_FA_EXCLAMATION_TRIANGLE); ImGui::SameLine();
+								ImGui::TextColored(IMVEC4_COL16(0, 137, 3, 255), mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
 							}
-
-						}
-						else if (firstWord == L"demandetexteplusieurslignes")
-						{
-							size_t DebutQuestion = PDGouvert[lPDG].find_first_of(L'\"', 0);
-							size_t FinQuestion = PDGouvert[lPDG].find_first_of(L'\"', DebutQuestion + 1);
-							size_t DebutAide = PDGouvert[lPDG].find_first_of(L'\"', FinQuestion + 1);
-							size_t FinAide = PDGouvert[lPDG].find_first_of(L'\"', DebutAide + 1);
-							wstring Question = PDGouvert[lPDG].substr(DebutQuestion + 1, FinQuestion - DebutQuestion - 1);
-							wstring Aide = PDGouvert[lPDG].substr(DebutAide + 1, FinAide - DebutAide - 1);
-
-							vector<wstring> mArgument;
-							wsplit(PDGouvert[lPDG].substr(FinAide + 1), mArgument, L' ');
-							if (mArgument.size() > 0)
-								if (mArgument[0] == L"")
-									mArgument.erase(mArgument.begin() + 0);
-							ImGui::SetNextItemWidth(200.0f);
-							ImGui::Text(fileHELPER.ConvertWideToANSI(Question).c_str());
-							ImGui::SameLine();
-							ImGui::InputTextMultiline(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
-								PDGouvertChar[lPDG], IM_ARRAYSIZE(PDGouvertChar[lPDG]));
-							if (Aide != L"")
+							else
+								ImGui::TextColored(IMVEC4_COL16(0,0,0,255),mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
+							ImGui::TableSetColumnIndex(1);
+							HelpMarker(mPDGHelper.ListeQuestion[lPDG].AideQuestion.c_str());
+							ImGui::TableSetColumnIndex(2);
+							if (mPDGHelper.ListeQuestion[lPDG].EstCheckbox)
 							{
-								ImGui::SameLine();
-								HelpMarker(fileHELPER.ConvertWideToANSI(Aide).c_str());
+								ImGui::Checkbox(string("##CheckBox" + pdgClassSEED + to_string(lPDG)).c_str(), &mPDGHelper.ListeQuestion[lPDG].CheckboxValue);
 							}
-
+							if (mPDGHelper.ListeQuestion[lPDG].EstLigneTexte)
+							{
+								ImGui::SetNextItemWidth(-1.0f);
+								ImGui::InputText(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
+									mPDGHelper.ListeQuestion[lPDG].DefautQuestion, IM_ARRAYSIZE(mPDGHelper.ListeQuestion[lPDG].DefautQuestion), ImGuiInputTextFlags_None);
+							}
+							if (mPDGHelper.ListeQuestion[lPDG].EstMultiLigneTexte)
+							{
+								ImGui::InputTextMultiline(string("##TexteMultiLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
+									mPDGHelper.ListeQuestion[lPDG].DefautQuestion, IM_ARRAYSIZE(mPDGHelper.ListeQuestion[lPDG].DefautQuestion), ImVec2(-1.0f, 40.0f), ImGuiInputTextFlags_None);
+							}
 						}
-						else if (firstWord == L"demandecasecocher")
-						{
-							printf("");
-
-						}
-
-
+						ImGui::EndTable();
 					}
 
 					ImGui::EndTabItem();
@@ -2137,7 +2195,8 @@ Programme sous licence GPL 3
 			if (ThemeSombre)
 				ImGui::StyleColorsDarkCharcoal();
 			else
-				ImGui::StyleColorBlackWhite();
+				ImGui::StyleColorsLight();
+			//ImGui::StyleColorBlackWhite();
 			ImGui::End();
 		}
 
