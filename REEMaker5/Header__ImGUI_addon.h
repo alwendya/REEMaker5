@@ -17,6 +17,18 @@ static void HelpMarker(const char* desc)
 		ImGui::EndTooltip();
 	}
 }
+static void ObligatoireMarker(const char* desc)
+{
+    ImGui::TextDisabled(ICON_FA_EXCLAMATION_TRIANGLE);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
 
 //#define STB_IMAGE_IMPLEMENTATION
 //#include <imgui/stb_image.h>

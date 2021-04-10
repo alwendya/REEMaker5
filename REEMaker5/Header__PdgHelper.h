@@ -43,8 +43,11 @@ public:
 	bool DrawOnPage(PoDoFo::PdfPainter&, PoDoFo::PdfDocument&);
 	int ItemCount();
 	int ItemQuestionCount();
-	// Slash à la fin
+	std::string DocumentOuvertANSI();
+	std::string DocumentOuvertUTF8();
+	std::wstring DocumentOuvertWIDE();
 	void SetBaseModelePath(std::wstring);
+	bool SauveDisque(std::wstring);
 	void ClearList();
 	~PDGHelper();
 	std::vector<Question> ListeQuestion;
@@ -79,10 +82,23 @@ private:
 	std::wstring ConvertUtf8ToWide(const std::string& str);
 	double GetMaxFontSize(PoDoFo::PdfFont*&, double, double, double, std::string, double = 1.1);
 	std::wstring BaseModelePath;
+	std::wstring DocumentOuvertWstring;
 };
 
 PDGHelper::PDGHelper()
 {
+}
+inline std::string PDGHelper::DocumentOuvertUTF8()
+{
+	return ConvertWideToUtf8(DocumentOuvertWstring);
+}
+inline std::string PDGHelper::DocumentOuvertANSI()
+{
+	return ConvertWideToANSI(DocumentOuvertWstring);
+}
+inline std::wstring PDGHelper::DocumentOuvertWIDE()
+{
+	return DocumentOuvertWstring;
 }
 void PDGHelper::SetBaseModelePath(std::wstring lBaseModelePath)
 {
@@ -92,9 +108,11 @@ void PDGHelper::SetBaseModelePath(std::wstring lBaseModelePath)
 }
 bool PDGHelper::OpenAndParseConfig(std::wstring CheminConfig)
 {
+	DocumentOuvertWstring = L"";
 	std::ifstream FichierConfig(BaseModelePath + CheminConfig, std::wofstream::in);
 	if (FichierConfig.fail())
 		return false;
+	DocumentOuvertWstring = CheminConfig;
 	std::vector<std::string> vecFichierPDG;
 	vecFichierPDG.clear();
 	for (std::string line; std::getline(FichierConfig, line); )
@@ -190,6 +208,385 @@ bool PDGHelper::OpenAndParseConfig(std::wstring CheminConfig)
 		}
 	}
 	return true;
+}
+
+inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
+{
+
+	if (vecCommandeList.size() == 0)
+	{
+		TRACE_PDG(L"INFO: Aucune commande à dessiner...\n");
+		return false;
+	}
+
+	std::ofstream Fichier(FichierSortie, std::wofstream::out);
+	if (Fichier.fail())
+		return false;
+
+	for (size_t lArg = 0; lArg < vecCommandeList.size(); lArg++)
+	{
+		switch (vecCommandeList[lArg].mTypeCommande)
+		{
+		case TypeCommande::DESSINELIGNE:
+		{
+			/*	--debutx=12	--debuty=24	--finx=200	--finy=24	--rouge=255	--vert=255	--bleu=0	--epaisseur=1.5	*/
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valFinX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "finx");
+			double valFinY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "finy");
+			{
+				Fichier << "DESSINELIGNE\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--finx=" << valFinX<< "\n";
+				Fichier << "--finy=" << valFinY << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--epaisseur=" << valEpaisseur << "\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINERECTANGLEVIDE:
+		{
+			/*	--debutx=12	--debuty=24	--finx=200	--finy=24	--rouge=255	--vert=255	--bleu=0	--epaisseur=1.5	*/
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			{
+				Fichier << "DESSINERECTANGLEVIDE\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--epaisseur=" << valEpaisseur << "\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINERECTANGLEREMPLIS:
+		{
+			/*	--debutx=12	--debuty=24	--finx=200	--finy=24	--rouge=255	--vert=255	--bleu=0	--remplisrouge	--remplisvert	--remplisbleu	--epaisseur=1.5	*/
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			int ValRemplisRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisrouge");
+			int valRemplisVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisvert");
+			int valRemplisBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisbleu");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			{
+				Fichier << "DESSINERECTANGLEREMPLIS\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--remplisrouge=" << ValRemplisRouge << "\n";
+				Fichier << "--remplisvert=" << valRemplisVert << "\n";
+				Fichier << "--remplisbleu=" << valRemplisBleu << "\n";
+				Fichier << "--epaisseur=" << valEpaisseur << "\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINETEXTE:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
+			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
+			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
+			{
+				Fichier << "DESSINETEXTE\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--taille=" << valTaille << "\n";
+				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--alignement=\"" << valAlignement << "\"\n";
+				Fichier << "--texte=\"" << valTexte << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINETEXTEMULTILIGNE:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
+			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
+			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
+			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
+			{
+				Fichier << "DESSINETEXTEMULTILIGNE\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--taille=" << valTaille << "\n";
+				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--alignlargeur=\"" << valAlignLargeur << "\"\n";
+				Fichier << "--alignhauteur=\"" << valAlignHauteur << "\"\n";
+				Fichier << "--texte=\"" << valTexte << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINETEXTEQUESTION:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
+			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
+			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
+			std::string valObligatoire = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "obligatoire"));
+			std::string valDefautquestion = "";
+			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
+				if (ListeQuestion[iReponse].IndexQuestion == lArg)
+				{
+					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					break;
+				}
+
+			{
+				Fichier << "DESSINETEXTEQUESTION\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--taille=" << valTaille << "\n";
+				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--alignement=\"" << valAlignement << "\"\n";
+
+				Fichier << "--question=\"" << valQuestion << "\"\n";
+				Fichier << "--aidequestion=\"" << valQuestionAide << "\"\n";
+				Fichier << "--defautquestion=\"" << valDefautquestion << "\"\n";
+				Fichier << "--obligatoire=\"" << valObligatoire << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINETEXTEMULTILIGNEQUESTION:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
+			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
+			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
+			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
+			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
+			std::string valObligatoire = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "obligatoire"));
+			std::string valDefautquestion = "";
+			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
+				if (ListeQuestion[iReponse].IndexQuestion == lArg)
+				{
+					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					break;
+				}
+			{
+				Fichier << "DESSINETEXTEMULTILIGNEQUESTION\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--taille=" << valTaille << "\n";
+				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--alignlargeur=\"" << valAlignLargeur << "\"\n";
+				Fichier << "--alignhauteur=\"" << valAlignHauteur << "\"\n";
+
+				Fichier << "--question=\"" << valQuestion << "\"\n";
+				Fichier << "--aidequestion=\"" << valQuestionAide << "\"\n";
+				Fichier << "--defautquestion=\"" << valDefautquestion << "\"\n";
+				Fichier << "--obligatoire=\"" << valObligatoire << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::INSEREIMAGE:
+		{
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			std::string valChemin = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "chemin"));
+			{
+				Fichier << "INSEREIMAGE\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--chemin=\"" << valChemin << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINECHECKBOX:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			{
+				Fichier << "DESSINECHECKBOX\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--epaisseur=\"" << valEpaisseur << "\"\n";
+				int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+				int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+				int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			}
+		}
+		break;
+		case TypeCommande::DESSINECHECKBOXQUESTION:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx");
+			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
+			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
+			std::string valObligatoire = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "obligatoire"));
+			std::string valDefautquestion = "";
+			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
+				if (ListeQuestion[iReponse].IndexQuestion == lArg)
+				{
+					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					break;
+				}
+			{
+				Fichier << "DESSINECHECKBOXQUESTION\n";
+				Fichier << "--debutx=" << valDebutX << "\n";
+				Fichier << "--debuty=" << valDebutY << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--epaisseur=" << valEpaisseur << "\n";
+
+				Fichier << "--question=\"" << valQuestion << "\"\n";
+				Fichier << "--aidequestion=\"" << valQuestionAide << "\"\n";
+				Fichier << "--defautquestion=\"" << valDefautquestion << "\"\n";
+				Fichier << "--obligatoire=\"" << valObligatoire << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::DESSINEMULTICHECKBOXQUESTION:
+		{
+			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
+			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
+			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
+			double valDebutX1 = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx1");
+			double valDebutY1 = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty1");
+			double valDebutX2 = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debutx2");
+			double valDebutY2 = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty2");
+			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
+			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
+			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
+			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
+			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
+			std::string valObligatoire = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "obligatoire"));
+			std::string valDefautquestion = "";
+			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
+				if (ListeQuestion[iReponse].IndexQuestion == lArg)
+				{
+					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					break;
+				}
+			{
+				Fichier << "DESSINECHECKBOXQUESTION\n";
+				Fichier << "--debutx1=" << valDebutX1 << "\n";
+				Fichier << "--debuty1=" << valDebutY1 << "\n";
+				Fichier << "--debutx2=" << valDebutX2 << "\n";
+				Fichier << "--debuty2=" << valDebutY2 << "\n";
+				Fichier << "--largeur=" << valLargeur << "\n";
+				Fichier << "--hauteur=" << valHauteur << "\n";
+				Fichier << "--rouge=" << ValRouge << "\n";
+				Fichier << "--vert=" << valVert << "\n";
+				Fichier << "--bleu=" << valBleu << "\n";
+				Fichier << "--epaisseur=" << valEpaisseur << "\n";
+
+
+				Fichier << "--question=\"" << valQuestion << "\"\n";
+				Fichier << "--aidequestion=\"" << valQuestionAide << "\"\n";
+				Fichier << "--defautquestion=\"" << valDefautquestion << "\"\n";
+				Fichier << "--obligatoire=\"" << valObligatoire << "\"\n";
+			}
+		}
+		break;
+		case TypeCommande::PAGESUIVANTE:
+		{
+			Fichier << "PAGESUIVANTE\n";
+		}
+		break;
+		default:
+			break;
+		}
+	}
+
+
+	return true;
+
+
 }
 
 inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocument& Document)

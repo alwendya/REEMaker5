@@ -27,8 +27,6 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 #include <SDL_syswm.h>
-#define IMVEC4_COL16(R,G,B,A)    ImVec4((float)R/255.0f, (float)G/255.0f, (float)B/255.0f, (float)A/255.0f)
-
 #define STB_IMAGE_IMPLEMENTATION
 #include <imgui/stb_image.h>
 #include <imgui/imgui.h>
@@ -45,3 +43,6 @@
 //#define PODOFO_HAVE_JPEG_LIB
 #include <podofo/podofo.h>
 #include <ctpl.h>
+
+#define IMVEC4_COL16(R,G,B,A)    ImVec4((float)R/255.0f, (float)G/255.0f, (float)B/255.0f, (float)A/255.0f)
+#define ICO_TEXT_CSTR(Icon,TexteUTF8) (const char*)std::string(Icon + std::string(TexteUTF8)).c_str()

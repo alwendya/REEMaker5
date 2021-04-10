@@ -57,6 +57,9 @@ public:
     std::wstring ConvertAnsiToWide(const std::string& str);
     std::string ConvertWideToUtf8(const std::wstring& wstr);
     std::wstring ConvertUtf8ToWide(const std::string& str);
+    std::string utf8_to_ansi(const std::string& wstr);
+    std::string ansi_to_utf8(const std::string& wstr);
+
     bool JeSuisUnDossier();
     bool JeSuisUnFichier();
     ~FileHelper();
@@ -368,6 +371,14 @@ std::wstring FileHelper::ConvertUtf8ToWide(const std::string& str)
     std::wstring wstr(count, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &wstr[0], count);
     return wstr;
+}
+std::string FileHelper::utf8_to_ansi(const std::string& str)
+{
+    return ConvertWideToANSI(ConvertUtf8ToWide(str));
+}
+std::string FileHelper::ansi_to_utf8(const std::string& str)
+{
+    return ConvertWideToUtf8(ConvertAnsiToWide(str));
 }
 bool FileHelper::isFile(LPCWSTR path) {
     auto pthSTAT = GetFileAttributesW(path);

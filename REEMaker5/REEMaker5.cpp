@@ -54,6 +54,7 @@ HWND mHwnd;
 static std::string MessageOPENCours("Analyse du document en cours");
 static std::string MessagePercentOPENCours("12 %");
 static wstring CheminPDG(L"");
+static wstring CheminPDGuser(L"");
 static wstring CheminBASE(L"");
 static wstring CheminFont(L"");
 static string sCheminFontDroid("");
@@ -67,11 +68,10 @@ static wstring CheminTemp(L"");
 static vector<PoDoFo::PdfRect> vecMediaBox;
 static vector<int> vecRotation;
 static vector<string> ListePDGModele;
-//static vector<wstring> PDGouvert;
+static vector<string> ListePDGUser;
 static string pdgClassSEED = "";
-//static char PDGouvertChar[9999][1024];
-//static bool PDGouvertBool[9999];
 static int item_current_vPDG = 0;
+static int item_current_vPDGuser = 0;
 static char  txtSpinner[2] = "\0";
 static char NomSite[32];
 static char TrancheCode[10][6];
@@ -87,6 +87,16 @@ static bool FolioProcedureAAnnuler[9999];
 static bool FolioProcedureAAnnulerBKUP[9999];
 static bool isGenereMiniature = false;
 static bool isLoadingMiniature = false;
+//GESTION TAB
+static bool TabFolio_ouvert = true;
+static bool TabPDG_ouvert = false;
+static bool TabCouleur_ouvert = false;
+static bool TabApropos_ouvert = false;
+// Bascule Folio <> PDG
+static bool AllerVersPDG = false;
+static bool AllerVersFolio = false;
+static bool FoliotageEnCours = false;
+
 static int NombreCoeur = 2;
 static int GenereMiniaturefileCount = 0;
 static int MiniatureSelectionnee = 0;
@@ -146,6 +156,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of(L"\\") + 1);
 
 	CheminPDG = CheminBASE + L"PDG_modele\\";
+	CheminPDGuser = CheminBASE + L"PDG_utilisateur\\";
 	CheminFont = CheminBASE + L"DroidSans.ttf";//J'utilise Droid Sans pour des histoires de droits
 	sCheminFontDroid = fileHELPER.ConvertWideToANSI(CheminBASE) + "DroidSans.ttf";
 	sCheminFontDroidBold = fileHELPER.ConvertWideToANSI(CheminBASE) + "DroidSans-Bold.ttf";
@@ -186,6 +197,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			else
 				ListePDGModele.push_back(p.path().filename().u8string());
 	}
+	for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
+	{
+		string pPathExtension = p.path().extension().string();
+		transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+		string pPathFileName = p.path().filename().string();
+		transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+		if (pPathExtension == ".txt")
+			ListePDGUser.push_back(p.path().filename().u8string());
+	}
 
 	if (ListePDGModele.size() == 0)
 	{
@@ -225,7 +245,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.IniFilename = NULL;
 	ImGui::/*StyleColorsLightGreen*/StyleColorBlackWhite();
-	SDL_SetWindowMinimumSize(window, 1024, 720);
+	SDL_SetWindowMinimumSize(window, 1124, 720);
 	/*
 	* Get Hwnd
 	*/
@@ -268,19 +288,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ListeCouleur.clear();
 	Couleur mCouleur;
 	{
-		mCouleur.NomCouleur = ICON_FA_LOCK " Rouge";
+		mCouleur.NomCouleur = ICO_TEXT_CSTR(ICON_FA_LOCK, " Rouge");
 		mCouleur.Locked = true;
 		mCouleur.CodeCouleur = { 1.0f,0.0f,0.0f,1.0f };
 		ListeCouleur.push_back(mCouleur);
-		mCouleur.NomCouleur = ICON_FA_LOCK " Vert";
+		mCouleur.NomCouleur = ICO_TEXT_CSTR(ICON_FA_LOCK, " Vert");
 		mCouleur.Locked = true;
 		mCouleur.CodeCouleur = { 0.0f,1.0f,0.0f,1.0f };
 		ListeCouleur.push_back(mCouleur);
-		mCouleur.NomCouleur = ICON_FA_LOCK " Bleu";
+		mCouleur.NomCouleur = ICO_TEXT_CSTR(ICON_FA_LOCK, " Bleu");
 		mCouleur.Locked = true;
 		mCouleur.CodeCouleur = { 0.0f,0.0f,1.0f,1.0f };
 		ListeCouleur.push_back(mCouleur);
-		mCouleur.NomCouleur = ICON_FA_LOCK " Noir";
+		mCouleur.NomCouleur = ICO_TEXT_CSTR(ICON_FA_LOCK, " Noir");
 		mCouleur.Locked = true;
 		mCouleur.CodeCouleur = { 0.0f,0.0f,0.0f,1.0f };
 		ListeCouleur.push_back(mCouleur);
@@ -391,11 +411,135 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			SDL_GetWindowSize(window, &width, &height);
 			ImGui::SetNextWindowSize(ImVec2(width, height));
 			ImGui::Begin("Fenètre principale", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);// Create a window called "Hello, world!" and append into it.
+#pragma region BoutonTAB
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,0.0f);
 
-			if (ImGui::BeginTabBar("TabBar"), ImGuiTabBarFlags_FittingPolicyScroll)
+			if (TabFolio_ouvert)
 			{
-				if (ImGui::BeginTabItem(ICON_FA_FILE_PDF_O " Folioter un REE"))
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Folioter un REE")))
 				{
+					TabFolio_ouvert = true;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Folioter un REE")))
+				{
+					TabFolio_ouvert = true;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+
+			if (TabPDG_ouvert)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_TEXT_O, u8" Page de garde")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = true;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_TEXT_O, u8" Page de garde")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = true;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+
+			if (TabCouleur_ouvert)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_COGS, u8" Options")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = true;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_COGS, u8" Options")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = true;
+					TabApropos_ouvert = false;
+				}
+				ImGui::PopStyleColor();
+			}
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+
+			if (TabApropos_ouvert)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_INFO, u8" A propos")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = true;
+				}
+				ImGui::PopStyleColor();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
+				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_INFO, u8" A propos")))
+				{
+					TabFolio_ouvert = false;
+					TabPDG_ouvert = false;
+					TabCouleur_ouvert = false;
+					TabApropos_ouvert = true;
+				}
+				ImGui::PopStyleColor();
+			}
+			ImGui::PopStyleVar();
+#pragma endregion
+			ImGui::Separator();
+
+			if (AllerVersFolio)
+			{
+				AllerVersFolio = false; TabFolio_ouvert = true; TabPDG_ouvert = false; TabCouleur_ouvert = false; TabApropos_ouvert = false;
+			}
+			if (AllerVersPDG)
+			{
+				AllerVersPDG = false; TabFolio_ouvert = false; TabPDG_ouvert = true; TabCouleur_ouvert = false; TabApropos_ouvert = false;
+			}
+
+			if (TabFolio_ouvert)
+			{
+				if (ImGui::BeginTable("##TableTABFOLIO", 1, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, -1.0f)))
+				{
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_TERMINAL, " TEST!!!")))
+					{
+						AllerVersPDG = true;
+						FoliotageEnCours = true;
+					}
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(u8"Chemin de la procédure :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Chemin de la procédure :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
@@ -410,7 +554,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					ImGui::SameLine();
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Rechercher##OuvreProcedure", ImVec2(280.0f, 22.0f)))
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FOLDER_OPEN, u8" Rechercher##OuvreProcedure"), ImVec2(280.0f, 22.0f)))
 					{
 						AfficheFenetreSpinner = true;
 						MessageOPENCours = fmt::format("Analyse du document PDF.");
@@ -602,7 +746,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
-					if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueCheminProcedure", BoutonContinueCheminProcedure, BoutonSuivant))
+					if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueCheminProcedure"), BoutonContinueCheminProcedure, BoutonSuivant))
 					{
 						BoutonContinueCheminProcedure = false;
 						AfficheReferenceProcedure = true;
@@ -653,7 +797,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							else
 								BoutonContinueReferenceProcedure = false;
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
-						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueReferenceProcedure", BoutonContinueReferenceProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, " Continuer##BoutonContinueReferenceProcedure"), BoutonContinueReferenceProcedure, BoutonSuivant))
 						{
 							BoutonContinueReferenceProcedure = false;
 							AfficheFolioProcedure = true;
@@ -708,7 +852,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
-						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonContinueFolioProcedure", BoutonContinueFolioProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueFolioProcedure"), BoutonContinueFolioProcedure, BoutonSuivant))
 						{
 							BoutonContinueFolioProcedure = false;
 							AfficheAnnuleFolioProcedure = true;
@@ -858,7 +1002,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						}
 
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
-						if (ImGuiAl::Button(ICON_FA_FORWARD " Continuer##BoutonAfficheAnnuleFolioProcedure", BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonAfficheAnnuleFolioProcedure"), BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
 						{
 							BoutonAfficheAnnuleFolioProcedure = false;
 							AfficheTrancheProcedure = true;
@@ -1699,14 +1843,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							ImGui::CloseCurrentPopup();
 						ImGui::EndPopup();
 					}
-					ImGui::EndTabItem();
+					ImGui::EndTable();
 				}
-				if (ImGui::BeginTabItem(ICON_FA_FILE_TEXT_O " Page de garde"))
+			}
+			if (TabPDG_ouvert)
+			{
+				if (ImGui::BeginTable("##TableTABPDG", 1, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, -1.0f)))
 				{
-					ImGui::Text(u8"Modèle de page de garde : ");
+
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
-					const char* combo_label = ListePDGModele[item_current_vPDG].c_str();  // Label to preview before opening the combo (technically it could be anything)
-					if (ImGui::BeginCombo("##CBBoxModelePDG", combo_label, 0 /*flags*/))
+					ImGui::Text(u8"Charger un modèle : ");
+					ImGui::SameLine();
+					const char* combo_labelPDGModele = ListePDGModele[item_current_vPDG].c_str();  // Label to preview before opening the combo (technically it could be anything)
+					const char* combo_labelPDGUser = ListePDGUser[item_current_vPDGuser].c_str();  // Label to preview before opening the combo (technically it could be anything)
+					ImGui::SetNextItemWidth(220.0f);
+					if (ImGui::BeginCombo("##CBBoxModelePDG", combo_labelPDGModele, 0 /*flags*/))
 					{
 						for (int n = 0; n < ListePDGModele.size(); n++)
 						{
@@ -1716,9 +1870,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								item_current_vPDG = n;
 								{
 									//Ouverture du fichier pour lecture
-									wstring CheminPDGModele = CheminPDG + fileHELPER.ConvertUtf8ToWide(ListePDGModele[item_current_vPDG]);
 									mPDGHelper.ClearList();
-									mPDGHelper.OpenAndParseConfig(CheminPDGModele);
+									mPDGHelper.SetBaseModelePath(CheminPDG);
+									mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGModele[item_current_vPDG]));
 								}
 							}
 							if (is_selected)
@@ -1727,7 +1881,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::EndCombo();
 					}
 					ImGui::SameLine();
-					if (ImGui::Button(ICON_FA_RECYCLE "Rafraichir les pages de gardes"))
+					ImGui::Text(u8"Charger une page de garde utilisateur : ");
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(220.0f);
+					if (ImGui::BeginCombo("##CBBoxPDGutilisateur", combo_labelPDGUser, 0 /*flags*/))
+					{
+						for (int n = 0; n < ListePDGUser.size(); n++)
+						{
+							const bool is_selected = (bool)(item_current_vPDGuser == n);
+							if (ImGui::Selectable(ListePDGUser[n].c_str(), is_selected))
+							{
+								item_current_vPDGuser = n;
+								{
+									//Ouverture du fichier pour lecture
+									mPDGHelper.ClearList();
+									mPDGHelper.SetBaseModelePath(CheminPDGuser);
+									mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGUser[item_current_vPDGuser]));
+								}
+							}
+							if (is_selected)
+								ImGui::SetItemDefaultFocus();
+						}
+						ImGui::EndCombo();
+					}
+					ImGui::SameLine();
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_RECYCLE, u8" Rafraichir la liste des pages de gardes")))
 					{
 						ListePDGModele.clear();
 						pdgClassSEED = sGenerate(12);
@@ -1744,30 +1922,78 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								else
 									ListePDGModele.push_back(p.path().filename().u8string());
 						}
+						for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
+						{
+							string pPathExtension = p.path().extension().string();
+							transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+							string pPathFileName = p.path().filename().string();
+							transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+							if (pPathExtension == ".txt")
+								ListePDGUser.push_back(p.path().filename().u8string());
+						}
+
+					}
+					ImGui::Separator();
+					ImGui::Button("##vide",ImVec2(0.01f,0.0f));
+					ImGui::SameLine();
+					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Document ouvert : ").c_str()));
+					ImGui::SameLine();
+					ImGui::PushFont(MYFont14bold);
+					ImGui::Text(mPDGHelper.DocumentOuvertUTF8().c_str());
+					ImGui::PopFont();
+					ImGui::SameLine();
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FLOPPY_O, u8" Sauvegarder cette page renseignée sur disque")))
+					{
+						mPDGHelper.SauveDisque(L"PDG_sauvé.txt");
+					}
+					if (FoliotageEnCours)
+					{
+						ImGui::SameLine();
+						ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+						ImGui::SameLine();
+						ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 225.0f);
+						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_CHECK_SQUARE, u8" Démarrer le foliotage")))
+						{
+							AllerVersFolio = true;
+							FoliotageEnCours = false;
+							//TODO Faire le lancement du foliotage ICI !
+						}
+						ImGui::SameLine();
+						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_UNDO, u8" Annuler")))
+						{
+							AllerVersFolio = true;
+							FoliotageEnCours = false;
+						}
 					}
 					ImGui::Separator();
 					/*
 					* DEBUT DESSIN DYNAMIQUE PDG
 					*/
-					if (ImGui::BeginTable("##tablePdgDynamique", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 100.0f)))
+					if (ImGui::BeginTable("##tablePdgDynamique", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 110.0f)))
 					{
-						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 350.0f, 0);
-						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 40.0f, 1);
-						ImGui::TableSetupColumn("##tablePdgDynamiqueLibéllé", ImGuiTableColumnFlags_WidthStretch, 2);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 20.0f, 0);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 350.0f, 1);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 20.0f, 2);
+						ImGui::TableSetupColumn("##tablePdgDynamiqueLibéllé", ImGuiTableColumnFlags_WidthStretch, 3);
 						for (size_t lPDG = 0; lPDG < mPDGHelper.ListeQuestion.size(); lPDG++)
 						{
 							ImGui::TableNextRow();
 							ImGui::TableSetColumnIndex(0);
 							if (mPDGHelper.ListeQuestion[lPDG].Obligatoire)
+								ObligatoireMarker(u8"Doit être obligatoirement renseigné."); ImGui::SameLine();
+
+							ImGui::TableSetColumnIndex(1);
+							if (mPDGHelper.ListeQuestion[lPDG].Obligatoire)
 							{
-								ImGui::TextColored(IMVEC4_COL16(0, 137, 3, 255), ICON_FA_EXCLAMATION_TRIANGLE); ImGui::SameLine();
-								ImGui::TextColored(IMVEC4_COL16(0, 137, 3, 255), mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
+								ImGui::PushFont(MYFont14bold);
+								ImGui::Text(mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
+								ImGui::PopFont();
 							}
 							else
-								ImGui::TextColored(IMVEC4_COL16(0,0,0,255),mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
-							ImGui::TableSetColumnIndex(1);
-							HelpMarker(mPDGHelper.ListeQuestion[lPDG].AideQuestion.c_str());
+								ImGui::Text(mPDGHelper.ListeQuestion[lPDG].LaQuestion.c_str());
 							ImGui::TableSetColumnIndex(2);
+							HelpMarker(mPDGHelper.ListeQuestion[lPDG].AideQuestion.c_str());
+							ImGui::TableSetColumnIndex(3);
 							if (mPDGHelper.ListeQuestion[lPDG].EstCheckbox)
 							{
 								ImGui::Checkbox(string("##CheckBox" + pdgClassSEED + to_string(lPDG)).c_str(), &mPDGHelper.ListeQuestion[lPDG].CheckboxValue);
@@ -1786,11 +2012,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						}
 						ImGui::EndTable();
 					}
-
-					ImGui::EndTabItem();
+					ImGui::EndTable();
 				}
-				if (ImGui::BeginTabItem(ICON_FA_COGS " Options"))
+			}
+			if (TabCouleur_ouvert)
+			{
+				if (ImGui::BeginTable("##TableCouleur", 1, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, -1.0f)))
 				{
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(u8"Couleurs prédéfinies :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Couleurs prédéfinies :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
@@ -1926,11 +2156,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					ImGui::InputScalar("##ScalarMargeX", ImGuiDataType_U16, &margeEmplacementTamponX, &u16_one, &u16_fast, "%u");
 					ImGui::SameLine(); ImGui::Text(u8"Hauteur en point : "); ImGui::SameLine();
 					ImGui::InputScalar("##ScalarMargeY", ImGuiDataType_U16, &margeEmplacementTamponY, &u16_one, &u16_fast, "%u");
-
-					ImGui::EndTabItem();
+					ImGui::EndTable();
 				}
-				if (ImGui::BeginTabItem(ICON_FA_INFO " A propos"))
+			}
+			if (TabApropos_ouvert)
+			{
+				if (ImGui::BeginTable("##TableAPROPOS", 1, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, -1.0f)))
 				{
+
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
 					const std::string markdownText = u8R"(
 ### REEMaker
 Version 5.0, développé en C++ 17 sous Visual Studio 2019
@@ -2050,13 +2285,9 @@ Programme sous licence GPL 3
 
 						ImGui::EndTable();
 					}
-
-					ImGui::EndTabItem();
+					ImGui::EndTable();
 				}
-
-				ImGui::EndTabBar();
 			}
-
 			//if (ImGuiAl::Button("Compresser le fichier 'compressible'", !AfficheFenetreSpinner))
 			//{
 			//	ImGui::OpenPopup("Avancement##OpEnCours");
@@ -2172,8 +2403,8 @@ Programme sous licence GPL 3
 			* Affichage Mode sombre / Clair
 			* + FPS
 			*/
-			ImGui::PushFont(MYFont10bold);
-			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("(60.0 FPS)").x - ImGui::CalcTextSize("Thème sombre").x - /*Bordure*/24.0f - /*Checkbox*/24.0f - /*Espace entre widget*/12.0f);
+			//ImGui::PushFont(MYFont10bold);
+			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("(60.0 FPS)").x - ImGui::CalcTextSize("Thème sombre  ").x - /*Bordure*/24.0f - /*Checkbox*/24.0f - /*Espace entre widget*/12.0f);
 			ImGui::SetCursorPosY(6.0f);
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 			ImGui::Checkbox("##ThemeSombre", &ThemeSombre);
@@ -2182,13 +2413,13 @@ Programme sous licence GPL 3
 			ImGui::Text(u8"Thème sombre");
 			ImGui::SameLine();
 			ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
-			ImGui::PopFont();
+			//ImGui::PopFont();
 #ifdef DEBUG
 			ImGui::SameLine();
 			ImGui::SetCursorPosX(700.0f);
-			ImGui::PushFont(MYFont10bold);
+			//ImGui::PushFont(MYFont10bold);
 			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-			ImGui::PopFont();
+			//ImGui::PopFont();
 			if (show_demo_window)
 				ImGui::ShowDemoWindow(&show_demo_window);
 #endif // DEBUG
