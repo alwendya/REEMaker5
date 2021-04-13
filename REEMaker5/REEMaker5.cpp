@@ -9,12 +9,6 @@
 using namespace std;
 
 /*
-TODO : Vérifier présence page de garde modèle
-
-
-*/
-
-/*
 * Prototype
 */
 bool SauveParametres();
@@ -87,6 +81,8 @@ static bool FolioProcedureAAnnuler[9999];
 static bool FolioProcedureAAnnulerBKUP[9999];
 static bool isGenereMiniature = false;
 static bool isLoadingMiniature = false;
+static bool DemarreFoliotageTASK = false;
+static bool FoliotageGenerePDG = false;
 //GESTION TAB
 static bool TabFolio_ouvert = true;
 static bool TabPDG_ouvert = false;
@@ -165,13 +161,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
 
-	//TODO
-	/*
-	* Test présence tout fichier + page de garde de base
-	* Sinon
-	* Message pour re-installer REEMaker 5
-	*/
-
+	// TODO > FLAG_0001
 
 	try
 	{
@@ -209,17 +199,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	if (ListePDGModele.size() == 0)
 	{
-		//TODO : Aucun fichier, on le recrée ... 
+		// TODO > FLAG_0001
 	}
 	else
 	{
 		mPDGHelper.SetBaseModelePath(CheminPDG);
 		mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
 		TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
-
-
-
-
 	}
 
 
@@ -412,7 +398,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			ImGui::SetNextWindowSize(ImVec2(width, height));
 			ImGui::Begin("Fenètre principale", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);// Create a window called "Hello, world!" and append into it.
 #pragma region BoutonTAB
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,0.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 
 			if (TabFolio_ouvert)
 			{
@@ -535,25 +521,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
-					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_TERMINAL, " TEST!!!")))
-					{
-						AllerVersPDG = true;
-						FoliotageEnCours = true;
-					}
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(u8"Chemin de la procédure :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Chemin de la procédure :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
 					ImGui::SameLine(); HelpMarker(u8"Cliquer sur le bouton Rechercher pour sélectionner la procédure PDF à passer REE."); /*ImGui::Text("");*/
 
-					float fenInsideWidth = ImGui::GetWindowContentRegionWidth();
-
 					static char strCHEMINPROCEDURE[4096] = "";
-					ImGui::SetNextItemWidth(fenInsideWidth - 280.0f - 8.0f);
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionMax().x - 280.0f - 10.0f);
 					ImGui::InputTextWithHint(u8"##TextCheminProcedure", u8"Cliquer sur rechercher pour sélectionner la procédure à folioter", strCHEMINPROCEDURE, IM_ARRAYSIZE(strCHEMINPROCEDURE), ImGuiInputTextFlags_ReadOnly);
 
-					ImGui::SameLine();
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 280.0f);
 					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FOLDER_OPEN, u8" Rechercher##OuvreProcedure"), ImVec2(280.0f, 22.0f)))
 					{
 						AfficheFenetreSpinner = true;
@@ -745,7 +724,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					ImGui::PopFont();
 
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
 					if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueCheminProcedure"), BoutonContinueCheminProcedure, BoutonSuivant))
 					{
 						BoutonContinueCheminProcedure = false;
@@ -796,7 +775,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								BoutonContinueReferenceProcedure = true;
 							else
 								BoutonContinueReferenceProcedure = false;
-						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x - 2.0f);
 						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, " Continuer##BoutonContinueReferenceProcedure"), BoutonContinueReferenceProcedure, BoutonSuivant))
 						{
 							BoutonContinueReferenceProcedure = false;
@@ -813,17 +792,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::PopFont();
 						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si la procédure est folioté en totalitée ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné."); /*ImGui::Text("");*/
 
-						if (ImGui::BeginTable("##TableTotalPartiel", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 55.0f)))
-						{
-
-							ImGui::TableNextRow();
-							ImGui::TableSetColumnIndex(0);
+						//if (ImGui::BeginTable("##TableTotalPartiel", 2, /*ImGuiTableFlags_SizingStretchSame*/ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, 25.0f)))
+						//{
+						//	ImGui::TableSetupColumn("Image##Image", ImGuiTableColumnFlags_WidthFixed, 200.0f, 0);
+						//	ImGui::TableSetupColumn("Actions##Actions", ImGuiTableColumnFlags_WidthStretch, 1);
+						//	ImGui::TableNextRow();
+						//	ImGui::TableSetColumnIndex(0);
 							ImGui::RadioButton("Foliotage total", &radioTotalPartiel, 0); ImGui::SameLine();
+							ImGui::Text("     "); ImGui::SameLine();
 
-							ImGui::TableSetColumnIndex(1);
+							//ImGui::TableSetColumnIndex(1);
+
 							ImGui::RadioButton("Foliotage partiel", &radioTotalPartiel, 1);
 							if (radioTotalPartiel == 1)
 							{
+								ImGui::SameLine(); ImGui::Text("  "); ImGui::SameLine();
 								ImGui::Text(u8"De la page "); ImGui::SameLine();
 								ImGui::SetNextItemWidth(100.0f);
 								if (ImGui::InputScalar("##ScalarDebut", ImGuiDataType_U16, &u16_PageDebut, &u16_one, &u16_fast, "%u", BoutonContinueFolioProcedure ? 0 : ImGuiInputTextFlags_ReadOnly))
@@ -841,17 +824,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								}
 
 							}
-							ImGui::EndTable();
-						}
+						//	ImGui::EndTable();
+						//}
 
 						ImGui::Text(u8"Le folio du premier tampon sera : "); ImGui::SameLine();
+						ImGui::SetNextItemWidth(100.0f);
 						if (ImGui::InputScalar("##ScalarFin", ImGuiDataType_U16, &u16_PremierNumero, &u16_one, &u16_fast, "%u", BoutonContinueFolioProcedure ? 0 : ImGuiInputTextFlags_ReadOnly))
 						{
 
 						}
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
 						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueFolioProcedure"), BoutonContinueFolioProcedure, BoutonSuivant))
 						{
 							BoutonContinueFolioProcedure = false;
@@ -871,7 +855,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::PopFont();
 						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si vous souhaitez que un/des folio(s) soit annulés (trait qui barre la page)."); /*ImGui::Text("");*/
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-						if (ImGui::Button(u8"Choisir les folio à annuler##BoutonAfficheFenetreAnnulation", ImVec2(400.0f, 22.0f)))
+						if (ImGui::Button(u8"Choisir les folio à annuler##BoutonAfficheFenetreAnnulation", ImVec2(300.0f, 22.0f)))
 						{
 							CheminPopplerPDFPPMTempOut = CheminTemp + L"\\" + wGenerate(8) + L"." + wGenerate(3);
 							CheminPopplerPDFPPMTempOutMini = CheminTemp + L"\\" + wGenerate(8) + L"." + wGenerate(3);
@@ -1000,8 +984,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								});
 							tTHREAD.detach();
 						}
-
-						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x);
+						ImGui::SameLine();
+						int nbCancel = 0;
+						for (size_t i = 0; i < vecMediaBox.size(); i++)
+							if (FolioProcedureAAnnuler[i] == true)
+								nbCancel++;
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_TIMES, fmt::format(u8"  {} folio(s) annulée(s)", nbCancel)));
+						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
 						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonAfficheAnnuleFolioProcedure"), BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
 						{
 							BoutonAfficheAnnuleFolioProcedure = false;
@@ -1199,7 +1188,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 								if (ImGui::Button(u8"Folioter avec une page de garde", ImVec2(-1.0f, 30.0f)))
 								{
-
+									AllerVersPDG = true;
+									FoliotageEnCours = true;
 								}
 								ImGui::PopStyleVar();
 
@@ -1207,7 +1197,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 								if (ImGui::Button(u8"Folioter sans page de garde", ImVec2(-1.0f, 30.0f)))
 								{
-									bool FoundAfile = false;
+									DemarreFoliotageTASK = false;
 									//Sauvegarder sous
 									while (true) {
 
@@ -1236,7 +1226,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 												hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
 												if (SUCCEEDED(hr))
 												{
-													FoundAfile = true;
+													FoliotageGenerePDG = false;//Ce sera un foliotage sans page de garde
+													DemarreFoliotageTASK = true;
 													FichierPDFsortie = wstring(pwsz);
 													MY_MSG("MSG: Enregistrer sous %s", string(FichierPDFsortie.begin(), FichierPDFsortie.end()));
 													CoTaskMemFree(pwsz);
@@ -1245,333 +1236,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										}
 										else
 										{
-											FoundAfile = false;
+											DemarreFoliotageTASK = false;
 											FichierPDFsortie = L"";
 										}
 										break;
 									}
 
-									if (FoundAfile)
-									{
-										AfficheFenetreSpinnerthreadFolioSansPDG = true;
-										MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
-										MessagePercentOPENCours = fmt::format("");
-										ImGui::OpenPopup("Avancement##threadFolioSansPDG");
-
-										std::thread t([]()
-											{
-												///*  CONFIGURATION TAMPON
-												//    /---------------------------------------\ 60
-												//    |                               |margH  |
-												//    | <margL>Site de fla...<margL>  Tr.2    |
-												//    |                               |margH  |
-												//    |---------------------------------------|h2  40
-												//    |                         |     |margH  |
-												//    | PNO REE DEL 003 VEC CHA | Indice A0   |
-												//    |                         |     |margH  |
-												//    |---------------------s1-100------------|h1  20
-												//    |               |               |margH  |
-												//    | Folio 10000   |      0D2320           |
-												//    |               |               |margH  |
-												//    \-----------s2-60-----------------------/
-												//                                                150
-												//*/
-
-
-
-												constexpr double TamponLargeur = 150.0;
-												constexpr double TamponHauteur = 60.0;
-												constexpr double TamponMargH = 7.0;
-												constexpr double TamponMargL = 4.0;
-												constexpr double TamponH1 = 20.0;
-												constexpr double TamponH2 = 40.0;
-												constexpr double TamponS1 = 100.0;
-												constexpr double TamponS2 = 60.0;
-												constexpr double TamponEpaisseur = 1.0;
-												constexpr double TamponPolice = 8;
-
-												PDFError exPDFError;
-
-
-
-
-												MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
-												MessagePercentOPENCours = fmt::format("");
-
-												for (size_t t = 0; t < 10; t++)
-												{
-													if (TrancheSelect[t] == false)
-														continue;
-
-													try
-													{
-														wstring TR_FichierPDFSortie = FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf";
-														{
-															PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
-															PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, fileHELPER.ConvertWideToANSI(CheminFont).c_str());
-															pFont->SetFontSize(TamponPolice);
-															size_t mStarting = 0;
-															size_t mEnding = vecMediaBox.size();
-
-															if (radioTotalPartiel == 1)//Partiel
-															{
-																mStarting = u16_PageDebut - 1;
-																mEnding = u16_PageFin;
-															}
-
-															for (size_t i = mStarting; i < mEnding; i++)
-															{
-																MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
-																MessagePercentOPENCours = fmt::format("Tr.{}", t);
-																PoDoFo::PdfPage* pPage = document.GetPage(i)/*.CreatePage(vecMediaBox[i])*/;
-
-																//pPage->SetRotation(vecRotation[i]);
-																PoDoFo::PdfPainter painter;
-																PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
-
-																if (vecRotation[i] == 90)
-																	rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-																else if (vecRotation[i] == 270)
-																	rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-
-																PoDoFo::PdfXObject xObj(rect, &document);
-																painter.SetPage(&xObj);
-																/*
-																* Matrix work
-																* SetTransformationMatrix(a, b, c, d, e, f)
-																* double a, b, c, d, e, f;
-																* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
-																* a = cos (alpha);					  0				  -1				 0
-																* b = sin (alpha);					  1				   0			    -1
-																* c = -sin(alpha);					 -1				   0			     1
-																* d = cos (alpha);					  0				  -1			     0
-																* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
-																* f = coord Y Rotation			      0       ValHauteur        ValLargeur
-																*
-																* e et f = point de rotation
-																* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
-																*/
-																if (vecRotation[i] == 90)
-																	painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
-																else if (vecRotation[i] == 180)
-																	painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
-																else if (vecRotation[i] == 270)
-																	painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
-
-																//  PdfImage image(&document);//Logo EDF PDG ?
-																//  image.LoadFromJpeg("C:\\PODOFO Build\\image.jpg");
-																//  painter.DrawImage(0.0, 0.0, &image);
-
-
-
-																painter.SetStrokeWidth(TamponEpaisseur);
-																//Fond du tampon en blanc avec bord de couleur rouge
-																painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
-																painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
-																painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
-																painter.FillAndStroke();
-
-																//Les lignes internes
-																painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
-																painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
-																painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
-#ifndef EPR
-																painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
-#endif
-
-																painter.SetFont(pFont);//Utilise pFont pour écrire...
-
-																painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
-																PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
-																PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
-																PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
-																PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
-																PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
-																PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
-
-																painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#ifndef EPR
-																painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#endif
-																painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-																painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-																painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
-																painter.FinishPage();
-
-
-																/*
-																* Affinage du Rect
-																*   0,vecHeight
-																*   X**************X vecWidth,vecHeight
-																*   *              *
-																*   *              *
-																*   *              *
-																*   *              *
-																*   *              *
-																*   *              *
-																*   *              *
-																*   *              *
-																*   X**************X 0,vecwidth
-																*  0,0
-																*/
-
-																if (radioEmplacementTampon == 0)
-																{//Haut Gauche
-																	rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																	rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-																	if (vecRotation[i] == 0)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 90)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																		rect.SetBottom((double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 180)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 270)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-																	}
-
-																}
-																else if (radioEmplacementTampon == 1)
-																{//Haut Droite
-																	if (vecRotation[i] == 0)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 90)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-																	}
-																	else if (vecRotation[i] == 180)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 270)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-																	}
-																}
-																else if (radioEmplacementTampon == 2)
-																{//Bas Gauche
-																	if (vecRotation[i] == 0)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 90)
-																	{//A Voir
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-																	}
-																	else if (vecRotation[i] == 180)
-																	{//A Voir
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 270)
-																	{//A voir
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-																	}
-																}
-																else if (radioEmplacementTampon == 3)
-																{//Bas Droite
-																	if (vecRotation[i] == 0)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 90)
-																	{
-																		rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-																	}
-																	else if (vecRotation[i] == 180)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-																		rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-																	}
-																	else if (vecRotation[i] == 270)
-																	{
-																		rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-																		rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-																	}
-																}
-
-																PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
-																pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
-																pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
-																pAnnotation->SetAppearanceStream(&xObj);
-
-
-																painter.FinishPage();
-
-															}
-															MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
-															MessagePercentOPENCours = fmt::format("Tr.{}", t);
-															//document.GetInfo()->SetCreator(PoDoFo::PdfString("REEMaker 5"));
-															//document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
-															//document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
-															//document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
-															document.Write(TR_FichierPDFSortie.c_str());
-														}
-													}
-													catch (const PoDoFo::PdfError& e)
-													{
-														MY_TRACE("Exception a la ligne %s", e.what());
-													}
-													catch (exception& ex)
-													{
-														MY_TRACE("Exception a la ligne %s", ex.what());
-													}
-													catch (...)
-													{
-														MY_TRACE("Exception inconnue a la ligne ..");
-													}
-												}
-												MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
-												MessagePercentOPENCours = fmt::format("");
-												this_thread::sleep_for(1s);
-												AfficheFenetreSpinnerthreadFolioSansPDG = false;
-											});
-										t.detach();
-									}
 								}
 								ImGui::PopStyleVar();
-								ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
-								if (ImGui::BeginPopupModal("Avancement##threadFolioSansPDG", NULL, ImGuiWindowFlags_NoResize))
-								{
-									ImGui::Text("");
-									ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
-									ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
-									ImGui::SameLine();
-									ImGui::PushFont(MYFont20);
-									ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
-									ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
-									ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
-									ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
-									ImGui::PopFont();
-
-									ImGui::TextWrapped(MessageOPENCours.c_str());
-
-									if (AfficheFenetreSpinnerthreadFolioSansPDG == false)
-										ImGui::CloseCurrentPopup();
-									ImGui::EndPopup();
-								}
 								ImGui::EndTable();
 							}
 					}
@@ -1934,7 +1606,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					}
 					ImGui::Separator();
-					ImGui::Button("##vide",ImVec2(0.01f,0.0f));
+					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
 					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Document ouvert : ").c_str()));
 					ImGui::SameLine();
@@ -1954,9 +1626,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 225.0f);
 						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_CHECK_SQUARE, u8" Démarrer le foliotage")))
 						{
-							AllerVersFolio = true;
-							FoliotageEnCours = false;
-							//TODO Faire le lancement du foliotage ICI !
+							DemarreFoliotageTASK = false;
+							//Sauvegarder sous
+
+							HRESULT hr;
+							CComPtr<IFileSaveDialog> pDlg;
+							COMDLG_FILTERSPEC aFileTypes[] = { { L"Fichier PDF", L"*.pdf" } };
+							hr = pDlg.CoCreateInstance(__uuidof(FileSaveDialog));
+							if (FAILED(hr))
+								break;
+							pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
+							pDlg->SetTitle(L"Enregistrer la procédure foliotée avec page de garde");
+							pDlg->SetOkButtonLabel(L"&Sauvegarder");
+							wstring CustomCheminPDF = wCheminPDForiginal;
+							CustomCheminPDF = CustomCheminPDF.substr(0, CustomCheminPDF.length() - 4);
+							CustomCheminPDF += L"_foliotée";
+							pDlg->SetFileName(CustomCheminPDF.c_str());
+							pDlg->SetDefaultExtension(L"pdf");
+							hr = pDlg->Show(NULL);
+							if (SUCCEEDED(hr))
+							{
+								CComPtr<IShellItem> pItem;
+								hr = pDlg->GetResult(&pItem);
+								if (SUCCEEDED(hr))
+								{
+									LPOLESTR pwsz = NULL;
+									hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
+									if (SUCCEEDED(hr))
+									{
+										DemarreFoliotageTASK = true;
+										FoliotageGenerePDG = true;//Ce sera un foliotage sans page de garde
+										AllerVersFolio = true;
+										FoliotageEnCours = false;
+										FichierPDFsortie = wstring(pwsz);
+										MY_MSG("MSG: Enregistrer sous %s", string(FichierPDFsortie.begin(), FichierPDFsortie.end()));
+										CoTaskMemFree(pwsz);
+									}
+								}
+							}
+							else
+							{
+								DemarreFoliotageTASK = false;
+								FichierPDFsortie = L"";
+							}
 						}
 						ImGui::SameLine();
 						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_UNDO, u8" Annuler")))
@@ -2288,117 +2000,423 @@ Programme sous licence GPL 3
 					ImGui::EndTable();
 				}
 			}
-			//if (ImGuiAl::Button("Compresser le fichier 'compressible'", !AfficheFenetreSpinner))
-			//{
-			//	ImGui::OpenPopup("Avancement##OpEnCours");
-			//	AfficheFenetreSpinner = true;
-			//	static float lvlCMP2 = 0;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	lvlCMP2 += 1.0f;
-			//	float lvlCMP = 0;
-			//	std::thread t([&key, &iv, &Chemin, &lvlCMP]()
-			//		{
-			//		std::cout << "thread function\n";
-			//		FILE* inFile = NULL;
-			//		MessageOPENCours = "Lecture du contenu du fichier source...";
-			//		std::string File2open = /*"C:\\MDP TeamViewer\\NUKLEAR_GDIP"*/ Chemin;
-			//		long long szFile2open = std::filesystem::file_size(File2open);
-			//		std::vector<unsigned char> BufferIN;
-			//		BufferIN.resize(szFile2open);
-			//		fopen_s(&inFile, File2open.c_str(), "rb");
-			//		size_t const szRead = fread_s(&BufferIN[0], BufferIN.size(), sizeof(unsigned char), BufferIN.size(), inFile);
-			//		fclose(inFile);
-			//		if (szRead != BufferIN.size()) {
-			//			printf("Erreur lecture");
-			//		}
-			//		//LEVEL de -5 à 22
-			//		// ON TESTE DE 0 à 22
-			//		while(true)
-			//		{
-			//			MessageOPENCours = std::string("Compression en cours niveau " + std::to_string((int)lvlCMP) + "\nThis text should automatically wrap on the edge of the window. The current implementation This text should automatically wrap on the edge of the window. The current implementation This text should automatically wrap on the edge of the window. The current implementation");
-			//			MessagePercentOPENCours = std::string(std::to_string((int)((100.0f / 22.0f) * lvlCMP))) + " %";
-			//			OutputDebugStringA("\n");
-			//			printf("--------------------------------------------------------------\n");
-			//			printf("Niveau de compression : %Id\n", lvlCMP);
-			//			std::vector<unsigned char> chunkCompAndCrypt;
-			//			plf::nanotimer mTimer;
-			//			mTimer.start();
-			//			mesErreur result = CompressAndCryptChunk(BufferIN, chunkCompAndCrypt, (int)lvlCMP, key, iv);
-			//			double data_MB = chunkCompAndCrypt.size();
-			//			data_MB = data_MB / (double)1024 / (double)1024;
-			//			double tElapsed = (double)mTimer.get_elapsed_ms();
-			//			double data_rate_MBps = data_MB / (tElapsed / 1000.);
-			//			sLock.lock();
-			//			BenchStruct mBStruct;
-			//			mBStruct.Level = (int)lvlCMP;
-			//			mBStruct.TailleOriginal = BufferIN.size();
-			//			mBStruct.TailleCompressé = chunkCompAndCrypt.size();
-			//			mBStruct.Ratio = (double)chunkCompAndCrypt.size() / (double)BufferIN.size();
-			//			mBStruct.TempsCompression = tElapsed;
-			//			mBStruct.DebitMbs = data_rate_MBps;
-			//			vecBench.push_back(mBStruct);
-			//			sLock.unlock();
-			//			//On simule une lecture
-			//			//Lecture 4 premier bytes
-			//			uint32_t compSize = MEM_read32(&chunkCompAndCrypt[0]);
-			//			//Lecture 4  bytes suivants
-			//			uint32_t DecompSize = MEM_read32(&chunkCompAndCrypt[4]);
-			//			//Lecture 8  bytes suivants
-			//			uint64_t uint64XXH3 = MEM_read64(&chunkCompAndCrypt[8]);
-			//			//On y va
-			//			//On simule la lecture du fichier de la taille de compsize
-			//			std::vector<unsigned char> BufferDecomp;
-			//			std::vector<unsigned char> BufferLU;
-			//			BufferLU.resize(chunkCompAndCrypt.size() - HeaderSize);
-			//			memcpy_s(&BufferLU[0], compSize, &chunkCompAndCrypt[HeaderSize], compSize);
-			//			//Fin simulation lecture
-			//			result = DecompressCryptChunk(BufferLU, BufferDecomp, compSize, DecompSize, uint64XXH3, key, iv);
-			//			lvlCMP += 1.0f;
-			//			if (lvlCMP >= 23.0f)
-			//				break; 
-			//		}
-			//		MessageOPENCours = fmt::format("Fin des opérations...");
-			//		AfficheFenetreSpinner = false;
-			//		});
-			//	t.detach();
-			//}
-			//if (AfficheFenetreSpinner)
-			//{
-			//	ImGui::SameLine();
-			//	ImGui::LoadingIndicatorCircle("##Lic", 8.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
-			//}
-			//sLock.lock();
-			//for (size_t i = 0; i < vecBench.size(); i++)
-			//{
-			//	std::string fmtText = fmt::format("Niveau {}    {:03.2f}% ({:06.2f}/{:06.2f}Ko) en {:06.2f}ms [{:03.2f}Mo/s]",
-			//		vecBench[i].Level, vecBench[i].Ratio * 100, vecBench[i].TailleCompressé / 1024., vecBench[i].TailleOriginal / 1024.,
-			//		vecBench[i].TempsCompression, vecBench[i].DebitMbs);
-			//	ImGui::ProgressBar(vecBench[i].Ratio, ImVec2(600.0f, 15.0f), fmtText.c_str());
-			//}
-			//sLock.unlock();
-			//ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
-			//if (ImGui::BeginPopupModal("Avancement##OpEnCours", NULL, ImGuiWindowFlags_AlwaysAutoResize))
-			//{
-			//	ImGui::Text("");
-			//	ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
-			//	ImGui::LoadingIndicatorCircle("##LICopencours", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
-			//	ImGui::SameLine();
-			//	ImGui::PushFont(MYFont20);
-			//	ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
-			//	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
-			//	ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
-			//	ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
-			//	ImGui::PopFont();
-			//	ImGui::TextWrapped(MessageOPENCours.c_str());
-			//	if (!AfficheFenetreSpinner)
-			//		ImGui::CloseCurrentPopup();
-			//	ImGui::EndPopup();
-			//}
+
+
+
+//Fonction déclenché par BOOL
+
+			if (DemarreFoliotageTASK)
+			{
+				DemarreFoliotageTASK = false;
+				AfficheFenetreSpinnerthreadFolioSansPDG = true;
+				MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
+				MessagePercentOPENCours = fmt::format("");
+				ImGui::OpenPopup("Avancement##threadFolioSansPDG");
+
+				std::thread t([]()
+					{
+						///*  CONFIGURATION TAMPON
+						//    /---------------------------------------\ 60
+						//    |                               |margH  |
+						//    | <margL>Site de fla...<margL>  Tr.2    |
+						//    |                               |margH  |
+						//    |---------------------------------------|h2  40
+						//    |                         |     |margH  |
+						//    | PNO REE DEL 003 VEC CHA | Indice A0   |
+						//    |                         |     |margH  |
+						//    |---------------------s1-100------------|h1  20
+						//    |               |               |margH  |
+						//    | Folio 10000   |      0D2320           |
+						//    |               |               |margH  |
+						//    \-----------s2-60-----------------------/
+						//                                                150
+						//*/
+
+
+
+						constexpr double TamponLargeur = 150.0;
+						constexpr double TamponHauteur = 60.0;
+						constexpr double TamponMargH = 7.0;
+						constexpr double TamponMargL = 4.0;
+						constexpr double TamponH1 = 20.0;
+						constexpr double TamponH2 = 40.0;
+						constexpr double TamponS1 = 100.0;
+						constexpr double TamponS2 = 60.0;
+						constexpr double TamponEpaisseur = 1.0;
+						constexpr double TamponPolice = 8;
+
+						PDFError exPDFError;
+
+
+
+
+						MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
+						MessagePercentOPENCours = fmt::format("");
+
+						for (size_t t = 0; t < 10; t++)
+						{
+							if (TrancheSelect[t] == false)
+								continue;
+
+							try
+							{
+								wstring TR_FichierPDFSortie = FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf";
+								{
+									size_t mStarting = 0;
+									size_t mEnding = vecMediaBox.size();
+									if (radioTotalPartiel == 1)//Partiel
+									{
+										mStarting = u16_PageDebut - 1;
+										mEnding = u16_PageFin;
+									}
+
+									PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
+									//PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, fileHELPER.ConvertWideToANSI(CheminFont).c_str());
+									PoDoFo::PdfFont* pFont = document.CreateFontSubset("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFont).c_str());
+									pFont->SetFontSize(TamponPolice);
+									for (size_t i = mStarting; i < mEnding; i++)
+									{
+										MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
+										MessagePercentOPENCours = fmt::format("Tr.{}", t);
+										PoDoFo::PdfPage* pPage = document.GetPage(i);
+										{
+											if (FolioProcedureAAnnuler[i])
+											{
+												const double DualSpace = 120.0;
+												const double SingleSpace = 60.0;
+
+												PoDoFo::PdfPainter painter;
+												PoDoFo::PdfRect rect(0, 0, vecMediaBox[i].GetWidth() - DualSpace, vecMediaBox[i].GetHeight() - DualSpace);
+
+												PoDoFo::PdfXObject xObj(rect, &document);
+												painter.SetPage(&xObj);
+												painter.SetStrokeWidth(2.0);
+												painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+												painter.SetFont(pFont);
+												pFont->SetFontSize(70.0);
+												PoDoFo::PdfString TexteFolioAnnulee = PoDoFo::PdfString("Sans Objet");
+												if (vecRotation[i] == 0)
+												{
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 90)
+												{
+													painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)vecMediaBox[i].GetHeight() - DualSpace, 0.0);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+														0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(vecMediaBox[i].GetHeight() - DualSpace, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+														0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()), rect.GetHeight(), rect.GetWidth(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 180)
+												{
+													painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)vecMediaBox[i].GetWidth() - DualSpace, (double)vecMediaBox[i].GetHeight() - DualSpace);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 270)
+												{
+													painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)vecMediaBox[i].GetWidth() - DualSpace);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+														0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+														vecMediaBox[i].GetHeight() - DualSpace, vecMediaBox[i].GetWidth() - DualSpace,
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												rect.SetLeft(SingleSpace);
+												rect.SetBottom(SingleSpace);
+												PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
+												pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
+												pAnnotation->SetTitle(PoDoFo::PdfString(string("Annuler_p" + to_string(i + 1))));
+												pAnnotation->SetAppearanceStream(&xObj);
+												painter.FinishPage();
+												pFont->SetFontSize(TamponPolice);
+											}
+										}
+										{
+											PoDoFo::PdfPainter painter;
+											PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
+
+											if (vecRotation[i] == 90)
+												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+											else if (vecRotation[i] == 270)
+												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+
+											PoDoFo::PdfXObject xObj(rect, &document);
+											painter.SetPage(&xObj);
+											/*
+											* Matrix work
+											* SetTransformationMatrix(a, b, c, d, e, f)
+											* double a, b, c, d, e, f;
+											* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
+											* a = cos (alpha);					  0				  -1				 0
+											* b = sin (alpha);					  1				   0			    -1
+											* c = -sin(alpha);					 -1				   0			     1
+											* d = cos (alpha);					  0				  -1			     0
+											* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
+											* f = coord Y Rotation			      0       ValHauteur        ValLargeur
+											*
+											* e et f = point de rotation
+											* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
+											*/
+											if (vecRotation[i] == 90)
+												painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
+											else if (vecRotation[i] == 180)
+												painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
+											else if (vecRotation[i] == 270)
+												painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
+
+											painter.SetStrokeWidth(TamponEpaisseur);
+											//Fond du tampon en blanc avec bord de couleur rouge
+											painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
+											painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
+											painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
+											painter.FillAndStroke();
+
+											//Les lignes internes
+											painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
+											painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
+											painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
+#ifndef EPR
+											painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
+#endif
+
+											painter.SetFont(pFont);//Utilise pFont pour écrire...
+
+											painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
+											PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
+											PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
+											PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
+											PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
+											PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
+											PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
+
+											painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#ifndef EPR
+											painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#endif
+											painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
+											painter.FinishPage();
+
+
+											/*
+											* Affinage du Rect
+											*   0,vecHeight
+											*   X**************X vecWidth,vecHeight
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   X**************X 0,vecwidth
+											*  0,0
+											*/
+
+											if (radioEmplacementTampon == 0)
+											{//Haut Gauche
+												rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+												rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom((double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+
+											}
+											else if (radioEmplacementTampon == 1)
+											{//Haut Droite
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+											}
+											else if (radioEmplacementTampon == 2)
+											{//Bas Gauche
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{//A Voir
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{//A Voir
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{//A voir
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+											}
+											else if (radioEmplacementTampon == 3)
+											{//Bas Droite
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+											}
+
+											PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
+											pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
+											pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
+											pAnnotation->SetAppearanceStream(&xObj);
+
+
+											painter.FinishPage();
+										}
+									}
+									MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
+									MessagePercentOPENCours = fmt::format("Tr.{}", t);
+									document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
+									//document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
+									//document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
+									//document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
+									if (FoliotageGenerePDG)
+									{
+										mPDGHelper.ArrayFromREEMAKER.REErouge = 255.0*sListeCouleurTranche[t][0];
+										mPDGHelper.ArrayFromREEMAKER.REEvert = 255.0*sListeCouleurTranche[t][1];
+										mPDGHelper.ArrayFromREEMAKER.REEbleu = 255.0*sListeCouleurTranche[t][2];
+										mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
+										mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
+										mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
+										PoDoFo::PdfPage* pPage = document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0),0);
+										PoDoFo::PdfPainter painter;
+										painter.SetPage(pPage);
+
+										int NBPageCree = mPDGHelper.DrawOnPage(painter, document);
+										painter.FinishPage();
+									}
+									document.Write(TR_FichierPDFSortie.c_str());
+								}
+							}
+							catch (const PoDoFo::PdfError& e)
+							{
+								MY_TRACE("Exception a la ligne %s", e.what());
+							}
+							catch (exception& ex)
+							{
+								MY_TRACE("Exception a la ligne %s", ex.what());
+							}
+							catch (...)
+							{
+								MY_TRACE("Exception inconnue a la ligne ..");
+							}
+						}
+						MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
+						MessagePercentOPENCours = fmt::format("");
+						this_thread::sleep_for(1s);
+						AfficheFenetreSpinnerthreadFolioSansPDG = false;
+					});
+				t.detach();
+			}
+
+			ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
+			if (ImGui::BeginPopupModal("Avancement##threadFolioSansPDG", NULL, ImGuiWindowFlags_NoResize))
+			{
+				ImGui::Text("");
+				ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
+				ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
+				ImGui::SameLine();
+				ImGui::PushFont(MYFont20);
+				ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
+				ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
+				ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
+				ImGui::PopFont();
+
+				ImGui::TextWrapped(MessageOPENCours.c_str());
+
+				if (AfficheFenetreSpinnerthreadFolioSansPDG == false)
+					ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+			}
+
+
+
 			/*
 			* Affichage Mode sombre / Clair
 			* + FPS
@@ -2734,7 +2752,7 @@ void CMainDlg::OnFileSave()
 
 			if (SUCCEEDED(hr))
 			{
-				//TODO: Save the file here, 'pwsz' has the full path
+				// Save the file here, 'pwsz' has the full path
 				CoTaskMemFree(pwsz);
 			}
 		}
@@ -2837,3 +2855,126 @@ if (SUCCEEDED(hr))
 	}
 }
 */
+
+//if (ImGuiAl::Button("Compresser le fichier 'compressible'", !AfficheFenetreSpinner))
+//{
+//	ImGui::OpenPopup("Avancement##OpEnCours");
+//	AfficheFenetreSpinner = true;
+//	static float lvlCMP2 = 0;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	lvlCMP2 += 1.0f;
+//	float lvlCMP = 0;
+//	std::thread t([&key, &iv, &Chemin, &lvlCMP]()
+//		{
+//		std::cout << "thread function\n";
+//		FILE* inFile = NULL;
+//		MessageOPENCours = "Lecture du contenu du fichier source...";
+//		std::string File2open = /*"C:\\MDP TeamViewer\\NUKLEAR_GDIP"*/ Chemin;
+//		long long szFile2open = std::filesystem::file_size(File2open);
+//		std::vector<unsigned char> BufferIN;
+//		BufferIN.resize(szFile2open);
+//		fopen_s(&inFile, File2open.c_str(), "rb");
+//		size_t const szRead = fread_s(&BufferIN[0], BufferIN.size(), sizeof(unsigned char), BufferIN.size(), inFile);
+//		fclose(inFile);
+//		if (szRead != BufferIN.size()) {
+//			printf("Erreur lecture");
+//		}
+//		//LEVEL de -5 à 22
+//		// ON TESTE DE 0 à 22
+//		while(true)
+//		{
+//			MessageOPENCours = std::string("Compression en cours niveau " + std::to_string((int)lvlCMP) + "\nThis text should automatically wrap on the edge of the window. The current implementation This text should automatically wrap on the edge of the window. The current implementation This text should automatically wrap on the edge of the window. The current implementation");
+//			MessagePercentOPENCours = std::string(std::to_string((int)((100.0f / 22.0f) * lvlCMP))) + " %";
+//			OutputDebugStringA("\n");
+//			printf("--------------------------------------------------------------\n");
+//			printf("Niveau de compression : %Id\n", lvlCMP);
+//			std::vector<unsigned char> chunkCompAndCrypt;
+//			plf::nanotimer mTimer;
+//			mTimer.start();
+//			mesErreur result = CompressAndCryptChunk(BufferIN, chunkCompAndCrypt, (int)lvlCMP, key, iv);
+//			double data_MB = chunkCompAndCrypt.size();
+//			data_MB = data_MB / (double)1024 / (double)1024;
+//			double tElapsed = (double)mTimer.get_elapsed_ms();
+//			double data_rate_MBps = data_MB / (tElapsed / 1000.);
+//			sLock.lock();
+//			BenchStruct mBStruct;
+//			mBStruct.Level = (int)lvlCMP;
+//			mBStruct.TailleOriginal = BufferIN.size();
+//			mBStruct.TailleCompressé = chunkCompAndCrypt.size();
+//			mBStruct.Ratio = (double)chunkCompAndCrypt.size() / (double)BufferIN.size();
+//			mBStruct.TempsCompression = tElapsed;
+//			mBStruct.DebitMbs = data_rate_MBps;
+//			vecBench.push_back(mBStruct);
+//			sLock.unlock();
+//			//On simule une lecture
+//			//Lecture 4 premier bytes
+//			uint32_t compSize = MEM_read32(&chunkCompAndCrypt[0]);
+//			//Lecture 4  bytes suivants
+//			uint32_t DecompSize = MEM_read32(&chunkCompAndCrypt[4]);
+//			//Lecture 8  bytes suivants
+//			uint64_t uint64XXH3 = MEM_read64(&chunkCompAndCrypt[8]);
+//			//On y va
+//			//On simule la lecture du fichier de la taille de compsize
+//			std::vector<unsigned char> BufferDecomp;
+//			std::vector<unsigned char> BufferLU;
+//			BufferLU.resize(chunkCompAndCrypt.size() - HeaderSize);
+//			memcpy_s(&BufferLU[0], compSize, &chunkCompAndCrypt[HeaderSize], compSize);
+//			//Fin simulation lecture
+//			result = DecompressCryptChunk(BufferLU, BufferDecomp, compSize, DecompSize, uint64XXH3, key, iv);
+//			lvlCMP += 1.0f;
+//			if (lvlCMP >= 23.0f)
+//				break; 
+//		}
+//		MessageOPENCours = fmt::format("Fin des opérations...");
+//		AfficheFenetreSpinner = false;
+//		});
+//	t.detach();
+//}
+//if (AfficheFenetreSpinner)
+//{
+//	ImGui::SameLine();
+//	ImGui::LoadingIndicatorCircle("##Lic", 8.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
+//}
+//sLock.lock();
+//for (size_t i = 0; i < vecBench.size(); i++)
+//{
+//	std::string fmtText = fmt::format("Niveau {}    {:03.2f}% ({:06.2f}/{:06.2f}Ko) en {:06.2f}ms [{:03.2f}Mo/s]",
+//		vecBench[i].Level, vecBench[i].Ratio * 100, vecBench[i].TailleCompressé / 1024., vecBench[i].TailleOriginal / 1024.,
+//		vecBench[i].TempsCompression, vecBench[i].DebitMbs);
+//	ImGui::ProgressBar(vecBench[i].Ratio, ImVec2(600.0f, 15.0f), fmtText.c_str());
+//}
+//sLock.unlock();
+//ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
+//if (ImGui::BeginPopupModal("Avancement##OpEnCours", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+//{
+//	ImGui::Text("");
+//	ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
+//	ImGui::LoadingIndicatorCircle("##LICopencours", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
+//	ImGui::SameLine();
+//	ImGui::PushFont(MYFont20);
+//	ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
+//	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
+//	ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
+//	ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
+//	ImGui::PopFont();
+//	ImGui::TextWrapped(MessageOPENCours.c_str());
+//	if (!AfficheFenetreSpinner)
+//		ImGui::CloseCurrentPopup();
+//	ImGui::EndPopup();
+//}
+
+
+
+/*
+*   *-*-*-*-*-*
+*   * T O D O *
+*   *-*-*-*-*-*
+*/
+// TODO : FLAG_0001 Tester la présence des pages de gardes et regénéré au besoin les modèles
+// TODO : Choisir le nom de fichier pour le bouton enregistrer la page de agrde saisie
+// TODO : Faire un bouton généré PDF pour la page de garde avec choix des tranches à la sorties

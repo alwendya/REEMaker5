@@ -16,8 +16,9 @@ bool _tracePDGHELPER(const wchar_t* format, ...);
 bool _tracePDGHELPER(const char* format, ...);
 #define TRACE_PDG _tracePDGHELPER
 
+#ifndef NDEBUG 
 #define TextDebug
-
+#endif
 class PDGHelper
 {
 public:
@@ -38,9 +39,19 @@ public:
 		bool EstLigneTexte = false;
 		bool EstMultiLigneTexte = false;
 	};
+	struct structReplaceArray
+	{
+		std::string NumeroTranche = "";
+		std::string ReferenceREE = "";
+		std::string IndiceREE = "";
+		int REErouge = 0;
+		int REEvert = 0;
+		int REEbleu = 0;
+
+	};
 	PDGHelper();
 	bool OpenAndParseConfig(std::wstring CheminConfig);
-	bool DrawOnPage(PoDoFo::PdfPainter&, PoDoFo::PdfDocument&);
+	int DrawOnPage(PoDoFo::PdfPainter&, PoDoFo::PdfDocument&);
 	int ItemCount();
 	int ItemQuestionCount();
 	std::string DocumentOuvertANSI();
@@ -51,6 +62,7 @@ public:
 	void ClearList();
 	~PDGHelper();
 	std::vector<Question> ListeQuestion;
+	structReplaceArray ArrayFromREEMAKER;
 private:
 	struct CmdKeys
 	{
@@ -589,20 +601,35 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 
 }
 
-inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocument& Document)
+inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocument& Document)
 {
+	int NombrePageCree = 1;
 	if (vecCommandeList.size() == 0)
 	{
 		TRACE_PDG(L"INFO: Aucune commande à dessiner...\n");
-		return false;
+		return 0;
 	}
+	char path[4096];
+	DWORD length;
+	length = GetModuleFileNameA(NULL, path, 4096);
+	/*
+		Chemin de base de l'executable, fini par \
+	*/
+	std::string CheminBASE(path);
+	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of("\\") + 1);
+	std::string CheminDroidSans = CheminBASE + "DroidSans.ttf";
+	std::string CheminDroidSansBOLD = CheminBASE + "DroidSans-Bold.ttf";
+	if (!std::filesystem::exists(CheminDroidSans))
+		return 0;
+	if (!std::filesystem::exists(CheminDroidSansBOLD))
+		return 0;
 
-	PoDoFo::PdfFont* pFont = Document.CreateFontSubset("Droid Sans", false, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), "DroidSans.ttf");
-	PoDoFo::PdfFont* pFontBOLD = Document.CreateFontSubset("Droid Sans Bold", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), "DroidSans-Bold.ttf");
+	PoDoFo::PdfFont* pFont = Document.CreateFontSubset("Droid Sans", false, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminDroidSans.c_str());
+	PoDoFo::PdfFont* pFontBOLD = Document.CreateFontSubset("Droid Sans Bold", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminDroidSansBOLD.c_str());
 	if (pFont == NULL || pFontBOLD == NULL)
 	{
 		TRACE_PDG(L"ERROR: pFont ou pFontBOLD n'a pu être chargé\n");
-		return false;
+		return 0;
 	}
 	double PageWidth = Painter.GetPage()->GetPageSize().GetWidth();
 	double PageHeight = Painter.GetPage()->GetPageSize().GetHeight();
@@ -623,6 +650,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			double valFinX = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "finx");
 			double valFinY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "finy");
 			{
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert= ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINELIGNE ... ");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetStrokeWidth(valEpaisseur);
@@ -644,6 +677,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			{
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINERECTANGLEVIDE ... ");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetStrokeWidth(valEpaisseur);
@@ -668,6 +707,18 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			{
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
+				if (ValRemplisRouge == -1 && valRemplisVert == -1 && valRemplisBleu == -1)
+				{
+					ValRemplisRouge = ArrayFromREEMAKER.REErouge;
+					valRemplisVert = ArrayFromREEMAKER.REEvert;
+					valRemplisBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINERECTANGLEREMPLIS ...");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetColor((double)(ValRemplisRouge / 255.0), (double)(valRemplisVert / 255.0), (double)(valRemplisBleu / 255.0));//Couleur ligne
@@ -692,6 +743,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
 			{
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINETEXTE ... ");
 				PoDoFo::EPdfAlignment mAlign = PoDoFo::EPdfAlignment::ePdfAlignment_Left;
 				if (valAlignement == "gauche")
@@ -742,7 +799,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
 			{
-				//TODO faire ce qu'il faut ici sur Podofo DESSINETEXTEMULTILIGNE
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINETEXTEMULTILIGNE ... ");
 				PoDoFo::EPdfAlignment mAlignLargeur = PoDoFo::EPdfAlignment::ePdfAlignment_Left;
 				PoDoFo::EPdfVerticalAlignment mAlignHauteur = PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Top;
@@ -808,7 +870,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 				}
 
 			{
-				//TODO faire ce qu'il faut ici sur Podofo DESSINETEXTEQUESTION
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINETEXTEQUESTION ... ");
 				PoDoFo::EPdfAlignment mAlign = PoDoFo::EPdfAlignment::ePdfAlignment_Left;
 				if (valAlignement == "gauche")
@@ -867,7 +934,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 					break;
 				}
 			{
-				//TODO faire ce qu'il faut ici sur Podofo DESSINETEXTEMULTILIGNEQUESTION
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINETEXTEMULTILIGNEQUESTION ...");
 				PoDoFo::EPdfAlignment mAlignLargeur = PoDoFo::EPdfAlignment::ePdfAlignment_Left;
 				PoDoFo::EPdfVerticalAlignment mAlignHauteur = PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Top;
@@ -916,23 +988,29 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			double valDebutY = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "debuty");
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
-			std::string valChemin = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "chemin");
+			std::string valChemin = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "chemin"));
 			{
-				//TODO faire ce qu'il faut ici sur Podofo INSEREIMAGE
 				TRACE_PDG(L"INFO: INSEREIMAGE ... ");
-
 				try
 				{
-					PoDoFo::PdfImage image(&Document);
-					image.LoadFromFile(valChemin.c_str());
-					double mScaleW = (valLargeur / image.GetWidth());
-					double mScaleH = (valHauteur / image.GetHeight());
-					Painter.DrawImage(valDebutX, PageHeight - valDebutY - valLargeur, &image, mScaleW, mScaleH);
+					std::string CheminImage = ConvertWideToANSI(BaseModelePath) + valChemin;
+					if (std::filesystem::exists(CheminImage))
+					{
+						PoDoFo::PdfImage image(&Document);
+						image.LoadFromFile(CheminImage.c_str());
+						double mScaleW = (valLargeur / image.GetWidth());
+						double mScaleH = (valHauteur / image.GetHeight());
+						Painter.DrawImage(valDebutX, PageHeight - valDebutY - valLargeur, &image, mScaleW, mScaleH);
+					}
 					TRACE_PDG(L" effectué\n");
 				}
 				catch (const std::exception&)
 				{
-					TRACE_PDG(L" non effectué, erreur de chargement de l'image %s\n",valChemin.c_str());
+					TRACE_PDG(L" non effectué, erreur de chargement de l'image %s\n", valChemin.c_str());
+				}
+				catch (const PoDoFo::PdfError&)
+				{
+					TRACE_PDG(L" non effectué, erreur de chargement de l'image %s\n", valChemin.c_str());
 				}
 			}
 		}
@@ -948,6 +1026,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valEpaisseur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "epaisseur");
 			{
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINECHECKBOX ... ");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetStrokeWidth(valEpaisseur);
@@ -981,7 +1065,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 					break;
 				}
 			{
-				//TODO faire ce qu'il faut ici sur Podofo DESSINECHECKBOXQUESTION
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINECHECKBOXQUESTION ... ");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetStrokeWidth(valEpaisseur);
@@ -1020,7 +1109,12 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 					break;
 				}
 			{
-				//TODO faire ce qu'il faut ici sur Podofo DESSINECHECKBOXQUESTION
+				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
+				{
+					ValRouge = ArrayFromREEMAKER.REErouge;
+					valVert = ArrayFromREEMAKER.REEvert;
+					valBleu = ArrayFromREEMAKER.REEbleu;
+				}
 				TRACE_PDG(L"INFO: DESSINECHECKBOXQUESTION ... ");
 				Painter.SetStrokingColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				Painter.SetStrokeWidth(valEpaisseur);
@@ -1048,8 +1142,9 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 		case TypeCommande::PAGESUIVANTE:
 		{
 			Painter.FinishPage();
-			PoDoFo::PdfPage* pPage = Document.CreatePage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0));
+			PoDoFo::PdfPage* pPage = Document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0),NombrePageCree);
 			Painter.SetPage(pPage);
+			NombrePageCree++;
 		}
 		break;
 		default:
@@ -1058,7 +1153,7 @@ inline bool PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocume
 	}
 
 
-	return true;
+	return NombrePageCree;
 }
 
 inline int PDGHelper::ItemCount()
@@ -1162,6 +1257,9 @@ std::string PDGHelper::RetourneCleStr(std::vector<CmdKeys>& lVecKey, std::string
 			if (mVal.substr(mVal.length() - 1, 1) == "\"")
 				mVal = mVal.substr(0, mVal.length() - 1);
 			replaceAll(mVal, "{RetourLigne}", "\n");
+			replaceAll(mVal, "{NumeroTranche}", ArrayFromREEMAKER.NumeroTranche.c_str());
+			replaceAll(mVal, "{ReferenceREE}", ArrayFromREEMAKER.ReferenceREE.c_str());
+			replaceAll(mVal, "{IndiceREE}", ArrayFromREEMAKER.IndiceREE.c_str());
 			return mVal;
 			break;
 		}
