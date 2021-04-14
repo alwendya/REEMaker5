@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN             // Exclure les en-têtes Windows rarement utilisés
 // Fichiers d'en-tête Windows
 #include <windows.h>
+#include "resource.h"
 #include "Shellapi.h"
 // Fichiers d'en-tête C RunTime
 #include <stdlib.h>

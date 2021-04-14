@@ -2,7 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <algorithm> 
+#include <algorithm>
 #include <cctype>
 #include <locale>
 #include <codecvt>
@@ -16,7 +16,10 @@ bool _tracePDGHELPER(const wchar_t* format, ...);
 bool _tracePDGHELPER(const char* format, ...);
 #define TRACE_PDG _tracePDGHELPER
 
-#ifndef NDEBUG 
+// UNDONE Et moi !
+// TODO Essai 1 et 2
+
+#ifndef NDEBUG
 #define TextDebug
 #endif
 class PDGHelper
@@ -32,7 +35,7 @@ public:
 		int IndexQuestion;
 		std::string LaQuestion;
 		std::string AideQuestion;
-		char DefautQuestion[4096];
+		std::vector<char> vDefautQuestion;
 		bool Obligatoire = false;
 		bool EstCheckbox = false;
 		bool CheckboxValue = false;
@@ -41,13 +44,13 @@ public:
 	};
 	struct structReplaceArray
 	{
+		std::string ReferenceSite = "";
 		std::string NumeroTranche = "";
 		std::string ReferenceREE = "";
 		std::string IndiceREE = "";
 		int REErouge = 0;
 		int REEvert = 0;
 		int REEbleu = 0;
-
 	};
 	PDGHelper();
 	bool OpenAndParseConfig(std::wstring CheminConfig);
@@ -60,15 +63,15 @@ public:
 	void SetBaseModelePath(std::wstring);
 	bool SauveDisque(std::wstring);
 	void ClearList();
-	~PDGHelper();
+	std::string StringFromVec(std::vector<char>);
 	std::vector<Question> ListeQuestion;
 	structReplaceArray ArrayFromREEMAKER;
+	~PDGHelper();
 private:
 	struct CmdKeys
 	{
 		std::string Keys;
 		std::string Valeur;
-
 	};
 	struct structCOMMANDE
 	{
@@ -176,7 +179,6 @@ bool PDGHelper::OpenAndParseConfig(std::wstring CheminConfig)
 				mStructCommand.mTypeCommande = TypeCommande::PAGESUIVANTE;
 				CmdKeys mCmdKeys;
 				mStructCommand.mVecCommande.push_back(mCmdKeys);//On crée le nouveau
-				//vecCommandeList.push_back(mStructCommand);//Donc on le sauve
 			}
 		}
 		else if (trimmedLine.substr(0, 2) == "--")
@@ -202,15 +204,23 @@ bool PDGHelper::OpenAndParseConfig(std::wstring CheminConfig)
 			mQuestion.LaQuestion = RetourneCleStr(vecCommandeList[i].mVecCommande, "question");
 			mQuestion.AideQuestion = RetourneCleStr(vecCommandeList[i].mVecCommande, "aidequestion");
 			mQuestion.IndexQuestion = i;
-			for (size_t j = 0; j < 4096; j++) // RESET VARIABLE
-				mQuestion.DefautQuestion[j] = '\0';
-			memcpy_s(mQuestion.DefautQuestion, RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion").size(), &RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion")[0], RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion").size());
-			
+			mQuestion.vDefautQuestion.clear();
+			mQuestion.vDefautQuestion.resize(RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion").size());
+			memcpy_s(&mQuestion.vDefautQuestion[0], RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion").size(), &RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion")[0], RetourneCleStr(vecCommandeList[i].mVecCommande, "defautquestion").size());
+
 			if (vecCommandeList[i].mTypeCommande == TypeCommande::DESSINECHECKBOXQUESTION || vecCommandeList[i].mTypeCommande == TypeCommande::DESSINEMULTICHECKBOXQUESTION)
 			{
 				mQuestion.EstCheckbox = true;
-				mQuestion.CheckboxValue = (std::string(mQuestion.DefautQuestion) == "oui");
+				mQuestion.CheckboxValue = (StringFromVec(mQuestion.vDefautQuestion) == "oui");
 				OutputDebugString(L"");
+			}
+			if (vecCommandeList[i].mTypeCommande == TypeCommande::DESSINETEXTEQUESTION || vecCommandeList[i].mTypeCommande == TypeCommande::DESSINETEXTEMULTILIGNEQUESTION)
+			{
+				int MaxLength = RetourneCleInt(vecCommandeList[i].mVecCommande, "max");
+				if (MaxLength == 0)
+					mQuestion.vDefautQuestion.resize(4096);
+				else
+					mQuestion.vDefautQuestion.resize(MaxLength + 1);
 			}
 			if (vecCommandeList[i].mTypeCommande == TypeCommande::DESSINETEXTEQUESTION)
 				mQuestion.EstLigneTexte = true;
@@ -224,7 +234,6 @@ bool PDGHelper::OpenAndParseConfig(std::wstring CheminConfig)
 
 inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 {
-
 	if (vecCommandeList.size() == 0)
 	{
 		TRACE_PDG(L"INFO: Aucune commande à dessiner...\n");
@@ -254,7 +263,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "DESSINELIGNE\n";
 				Fichier << "--debutx=" << valDebutX << "\n";
 				Fichier << "--debuty=" << valDebutY << "\n";
-				Fichier << "--finx=" << valFinX<< "\n";
+				Fichier << "--finx=" << valFinX << "\n";
 				Fichier << "--finy=" << valFinY << "\n";
 				Fichier << "--rouge=" << ValRouge << "\n";
 				Fichier << "--vert=" << valVert << "\n";
@@ -327,7 +336,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
 			{
@@ -340,7 +349,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "--vert=" << valVert << "\n";
 				Fichier << "--bleu=" << valBleu << "\n";
 				Fichier << "--taille=" << valTaille << "\n";
-				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--style=" << valStyle << "\n";
 				Fichier << "--alignement=\"" << valAlignement << "\"\n";
 				Fichier << "--texte=\"" << valTexte << "\"\n";
 			}
@@ -356,7 +365,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
 			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
@@ -370,7 +379,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "--vert=" << valVert << "\n";
 				Fichier << "--bleu=" << valBleu << "\n";
 				Fichier << "--taille=" << valTaille << "\n";
-				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--style=" << valStyle << "\n";
 				Fichier << "--alignlargeur=\"" << valAlignLargeur << "\"\n";
 				Fichier << "--alignhauteur=\"" << valAlignHauteur << "\"\n";
 				Fichier << "--texte=\"" << valTexte << "\"\n";
@@ -379,6 +388,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 		break;
 		case TypeCommande::DESSINETEXTEQUESTION:
 		{
+			int ValMax = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "max");
 			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
 			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
 			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
@@ -387,7 +397,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
 			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
 			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
@@ -396,7 +406,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 
@@ -410,7 +421,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "--vert=" << valVert << "\n";
 				Fichier << "--bleu=" << valBleu << "\n";
 				Fichier << "--taille=" << valTaille << "\n";
-				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--style=" << valStyle << "\n";
+				Fichier << "--max=" << ValMax << "\n";
 				Fichier << "--alignement=\"" << valAlignement << "\"\n";
 
 				Fichier << "--question=\"" << valQuestion << "\"\n";
@@ -422,6 +434,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 		break;
 		case TypeCommande::DESSINETEXTEMULTILIGNEQUESTION:
 		{
+			int ValMax = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "max");
 			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
 			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
 			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
@@ -430,7 +443,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
 			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
 			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
@@ -440,7 +453,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -453,7 +467,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "--vert=" << valVert << "\n";
 				Fichier << "--bleu=" << valBleu << "\n";
 				Fichier << "--taille=" << valTaille << "\n";
-				Fichier << "--gras=" << valGras << "\n";
+				Fichier << "--style=" << valStyle << "\n";
+				Fichier << "--max=" << ValMax << "\n";
 				Fichier << "--alignlargeur=\"" << valAlignLargeur << "\"\n";
 				Fichier << "--alignhauteur=\"" << valAlignHauteur << "\"\n";
 
@@ -521,7 +536,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -561,7 +577,8 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -576,7 +593,6 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 				Fichier << "--vert=" << valVert << "\n";
 				Fichier << "--bleu=" << valBleu << "\n";
 				Fichier << "--epaisseur=" << valEpaisseur << "\n";
-
 
 				Fichier << "--question=\"" << valQuestion << "\"\n";
 				Fichier << "--aidequestion=\"" << valQuestionAide << "\"\n";
@@ -595,10 +611,7 @@ inline bool PDGHelper::SauveDisque(std::wstring FichierSortie)
 		}
 	}
 
-
 	return true;
-
-
 }
 
 inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocument& Document)
@@ -617,16 +630,24 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 	*/
 	std::string CheminBASE(path);
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of("\\") + 1);
-	std::string CheminDroidSans = CheminBASE + "DroidSans.ttf";
-	std::string CheminDroidSansBOLD = CheminBASE + "DroidSans-Bold.ttf";
-	if (!std::filesystem::exists(CheminDroidSans))
+	std::string CheminRobotoMonoRegular = CheminBASE + "Police\\RobotoMono-Regular.ttf";
+	std::string CheminRobotoMonoBold = CheminBASE + "Police\\RobotoMono-Bold.ttf";
+	std::string CheminRobotoMonoItalic = CheminBASE + "Police\\RobotoMono-Italic.ttf";
+	std::string CheminRobotoMonoBoldItalic = CheminBASE + "Police\\RobotoMono-BoldItalic.ttf";
+	if (!std::filesystem::exists(CheminRobotoMonoRegular))
 		return 0;
-	if (!std::filesystem::exists(CheminDroidSansBOLD))
+	if (!std::filesystem::exists(CheminRobotoMonoBold))
+		return 0;
+	if (!std::filesystem::exists(CheminRobotoMonoItalic))
+		return 0;
+	if (!std::filesystem::exists(CheminRobotoMonoBoldItalic))
 		return 0;
 
-	PoDoFo::PdfFont* pFont = Document.CreateFontSubset("Droid Sans", false, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminDroidSans.c_str());
-	PoDoFo::PdfFont* pFontBOLD = Document.CreateFontSubset("Droid Sans Bold", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminDroidSansBOLD.c_str());
-	if (pFont == NULL || pFontBOLD == NULL)
+	PoDoFo::PdfFont* pFont = Document.CreateFontSubset("Roboto Mono", false, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminRobotoMonoRegular.c_str());
+	PoDoFo::PdfFont* pFontBOLD = Document.CreateFontSubset("Roboto Mono Bold", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminRobotoMonoBold.c_str());
+	PoDoFo::PdfFont* pFontITALIC = Document.CreateFontSubset("Roboto Mono Italic", false, true, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminRobotoMonoItalic.c_str());
+	PoDoFo::PdfFont* pFontBOLDITALIC = Document.CreateFontSubset("Roboto Mono Bold Italic", true, true, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), CheminRobotoMonoBoldItalic.c_str());
+	if (pFont == NULL || pFontBOLD == NULL || pFontBOLDITALIC == NULL || pFontITALIC == NULL)
 	{
 		TRACE_PDG(L"ERROR: pFont ou pFontBOLD n'a pu être chargé\n");
 		return 0;
@@ -653,7 +674,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				if (ValRouge == -1 && valVert == -1 && valBleu == -1)
 				{
 					ValRouge = ArrayFromREEMAKER.REErouge;
-					valVert= ArrayFromREEMAKER.REEvert;
+					valVert = ArrayFromREEMAKER.REEvert;
 					valBleu = ArrayFromREEMAKER.REEbleu;
 				}
 				TRACE_PDG(L"INFO: DESSINELIGNE ... ");
@@ -739,7 +760,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
 			{
@@ -761,15 +782,25 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				std::string lValTexte = valTexte;
 				replaceAll(lValTexte, "\n", "");
-				if (valGras == 1)
+				if (valStyle == 0)
+				{
+					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFont);
+				}
+				else if (valStyle == 1)
 				{
 					pFontBOLD->SetFontSize((float)GetMaxFontSize(pFontBOLD, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
 					Painter.SetFont(pFontBOLD);
 				}
-				else
+				else if (valStyle == 2)
 				{
-					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
-					Painter.SetFont(pFont);
+					pFontITALIC->SetFontSize((float)GetMaxFontSize(pFontITALIC, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFontITALIC);
+				}
+				else if (valStyle == 3)
+				{
+					pFontBOLDITALIC->SetFontSize((float)GetMaxFontSize(pFontBOLDITALIC, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFontBOLDITALIC);
 				}
 				Painter.DrawMultiLineText(PoDoFo::PdfRect(valDebutX, PageHeight - valDebutY - valHauteur, valLargeur, valHauteur), PoDoFo::PdfString(valTexte), mAlign, PoDoFo::ePdfVerticalAlignment_Center, false);
 #ifdef TextDebug
@@ -781,8 +812,8 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetStrokeStyle(PoDoFo::ePdfStrokeStyle_Solid);
 #endif // debugtext
 				TRACE_PDG(L" effectué\n");
+				}
 			}
-		}
 		break;
 		case TypeCommande::DESSINETEXTEMULTILIGNE:
 		{
@@ -794,7 +825,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
 			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
 			std::string valTexte = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "texte"));
@@ -824,15 +855,25 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				std::string lValTexte = valTexte;
 				replaceAll(lValTexte, "\n", "");
-				if (valGras == 1)
+				if (valStyle == 0)
+				{
+					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFont);
+				}
+				else if (valStyle == 1)
 				{
 					pFontBOLD->SetFontSize((float)GetMaxFontSize(pFontBOLD, valLargeur, valHauteur, valTaille, lValTexte));
 					Painter.SetFont(pFontBOLD);
 				}
-				else
+				else if (valStyle == 2)
 				{
-					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte));
-					Painter.SetFont(pFont);
+					pFontITALIC->SetFontSize((float)GetMaxFontSize(pFontITALIC, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFontITALIC);
+				}
+				else if (valStyle == 3)
+				{
+					pFontBOLDITALIC->SetFontSize((float)GetMaxFontSize(pFontBOLDITALIC, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFontBOLDITALIC);
 				}
 				Painter.DrawMultiLineText(PoDoFo::PdfRect(valDebutX, PageHeight - valDebutY - valHauteur, valLargeur, valHauteur), PoDoFo::PdfString(valTexte), mAlignLargeur, mAlignHauteur);
 #ifdef TextDebug
@@ -844,11 +885,12 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetStrokeStyle(PoDoFo::ePdfStrokeStyle_Solid);
 #endif // debugtext
 				TRACE_PDG(L" effectué\n");
+				}
 			}
-		}
 		break;
 		case TypeCommande::DESSINETEXTEQUESTION:
 		{
+			int ValMax = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "max");
 			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
 			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
 			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
@@ -857,7 +899,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignement = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignement");
 			std::string valQuestion = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question"));
 			std::string valQuestionAide = from_utf8(RetourneCleStr(vecCommandeList[lArg].mVecCommande, "aidequestion"));
@@ -865,7 +907,8 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 
@@ -888,15 +931,25 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				std::string lValTexte = valDefautquestion;
 				replaceAll(lValTexte, "\n", "");
-				if (valGras == 1)
+				if (valStyle == 0)
+				{
+					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFont);
+				}
+				else if (valStyle == 1)
 				{
 					pFontBOLD->SetFontSize((float)GetMaxFontSize(pFontBOLD, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
 					Painter.SetFont(pFontBOLD);
 				}
-				else
+				else if (valStyle == 2)
 				{
-					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
-					Painter.SetFont(pFont);
+					pFontITALIC->SetFontSize((float)GetMaxFontSize(pFontITALIC, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFontITALIC);
+				}
+				else if (valStyle == 3)
+				{
+					pFontBOLDITALIC->SetFontSize((float)GetMaxFontSize(pFontBOLDITALIC, valLargeur, valHauteur, valTaille, lValTexte, 1.0));
+					Painter.SetFont(pFontBOLDITALIC);
 				}
 				Painter.DrawMultiLineText(PoDoFo::PdfRect(valDebutX, PageHeight - valDebutY - valHauteur, valLargeur, valHauteur), PoDoFo::PdfString(valDefautquestion), mAlign, PoDoFo::ePdfVerticalAlignment_Center, false);
 #ifdef TextDebug
@@ -908,11 +961,12 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetStrokeStyle(PoDoFo::ePdfStrokeStyle_Solid);
 #endif // debugtext
 				TRACE_PDG(L" effectué\n");
+				}
 			}
-		}
 		break;
 		case TypeCommande::DESSINETEXTEMULTILIGNEQUESTION:
 		{
+			int ValMax = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "max");
 			int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
 			int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
 			int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
@@ -921,7 +975,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			double valLargeur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "largeur");
 			double valHauteur = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "hauteur");
 			double valTaille = RetourneCleDouble(vecCommandeList[lArg].mVecCommande, "taille");
-			int valGras = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "gras");
+			int valStyle = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "style");
 			std::string valAlignLargeur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignlargeur");
 			std::string valAlignHauteur = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "alignhauteur");
 			std::string from_utf8valQuestion = RetourneCleStr(vecCommandeList[lArg].mVecCommande, "question");
@@ -930,7 +984,8 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -959,15 +1014,25 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 				Painter.SetColor((double)(ValRouge / 255.0), (double)(valVert / 255.0), (double)(valBleu / 255.0));//Couleur ligne
 				std::string lValTexte = valDefautquestion;
 				replaceAll(lValTexte, "\n", "");
-				if (valGras == 1)
+				if (valStyle == 0)
+				{
+					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFont);
+				}
+				else if (valStyle == 1)
 				{
 					pFontBOLD->SetFontSize((float)GetMaxFontSize(pFontBOLD, valLargeur, valHauteur, valTaille, lValTexte));
 					Painter.SetFont(pFontBOLD);
 				}
-				else
+				else if (valStyle == 2)
 				{
-					pFont->SetFontSize((float)GetMaxFontSize(pFont, valLargeur, valHauteur, valTaille, lValTexte));
-					Painter.SetFont(pFont);
+					pFontITALIC->SetFontSize((float)GetMaxFontSize(pFontITALIC, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFontITALIC);
+				}
+				else if (valStyle == 3)
+				{
+					pFontBOLDITALIC->SetFontSize((float)GetMaxFontSize(pFontBOLDITALIC, valLargeur, valHauteur, valTaille, lValTexte));
+					Painter.SetFont(pFontBOLDITALIC);
 				}
 				Painter.DrawMultiLineText(PoDoFo::PdfRect(valDebutX, PageHeight - valDebutY - valHauteur, valLargeur, valHauteur), PoDoFo::PdfString(valDefautquestion), mAlignLargeur, mAlignHauteur);
 #ifdef TextDebug
@@ -1000,7 +1065,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 						image.LoadFromFile(CheminImage.c_str());
 						double mScaleW = (valLargeur / image.GetWidth());
 						double mScaleH = (valHauteur / image.GetHeight());
-						Painter.DrawImage(valDebutX, PageHeight - valDebutY - valLargeur, &image, mScaleW, mScaleH);
+						Painter.DrawImage(valDebutX, PageHeight - valDebutY - valHauteur, &image, mScaleW, mScaleH);
 					}
 					TRACE_PDG(L" effectué\n");
 				}
@@ -1061,7 +1126,8 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -1105,7 +1171,8 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 			for (size_t iReponse = 0; iReponse < ListeQuestion.size(); iReponse++)
 				if (ListeQuestion[iReponse].IndexQuestion == lArg)
 				{
-					valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].DefautQuestion));
+					valDefautquestion = from_utf8(StringFromVec(ListeQuestion[iReponse].vDefautQuestion));
+					//valDefautquestion = from_utf8(std::string(ListeQuestion[iReponse].vDefautQuestion.begin(), ListeQuestion[iReponse].vDefautQuestion.end()));
 					break;
 				}
 			{
@@ -1142,7 +1209,7 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 		case TypeCommande::PAGESUIVANTE:
 		{
 			Painter.FinishPage();
-			PoDoFo::PdfPage* pPage = Document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0),NombrePageCree);
+			PoDoFo::PdfPage* pPage = Document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0), NombrePageCree);
 			Painter.SetPage(pPage);
 			NombrePageCree++;
 		}
@@ -1150,11 +1217,10 @@ inline int PDGHelper::DrawOnPage(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocumen
 		default:
 			break;
 		}
-	}
-
+		}
 
 	return NombrePageCree;
-}
+		}
 
 inline int PDGHelper::ItemCount()
 {
@@ -1171,6 +1237,21 @@ inline void PDGHelper::ClearList()
 	ListeQuestion.clear();
 }
 
+inline std::string PDGHelper::StringFromVec(std::vector<char> vecChar)
+{
+	int EndPos = -1;
+	for (int i = 0; i < vecChar.size(); i++)
+	{
+		if (vecChar[i] == '\0')
+		{
+			EndPos = i;
+			break;
+		}
+	}
+	if (EndPos == -1)
+		EndPos = vecChar.size();
+	return std::string(vecChar.begin(), vecChar.begin() + EndPos);
+}
 
 // trim from start(in place)
 inline void PDGHelper::ltrim(std::string& s) {
@@ -1244,7 +1325,6 @@ inline double PDGHelper::GetMaxFontSize(PoDoFo::PdfFont*& Police, double rectWid
 	return lTaillePolice;
 }
 
-
 std::string PDGHelper::RetourneCleStr(std::vector<CmdKeys>& lVecKey, std::string Cle)
 {
 	for (size_t i = 0; i < lVecKey.size(); i++)
@@ -1257,6 +1337,7 @@ std::string PDGHelper::RetourneCleStr(std::vector<CmdKeys>& lVecKey, std::string
 			if (mVal.substr(mVal.length() - 1, 1) == "\"")
 				mVal = mVal.substr(0, mVal.length() - 1);
 			replaceAll(mVal, "{RetourLigne}", "\n");
+			replaceAll(mVal, "{Site}", ArrayFromREEMAKER.ReferenceSite.c_str());
 			replaceAll(mVal, "{NumeroTranche}", ArrayFromREEMAKER.NumeroTranche.c_str());
 			replaceAll(mVal, "{ReferenceREE}", ArrayFromREEMAKER.ReferenceREE.c_str());
 			replaceAll(mVal, "{IndiceREE}", ArrayFromREEMAKER.IndiceREE.c_str());
@@ -1319,7 +1400,6 @@ std::wstring PDGHelper::ConvertUtf8ToWide(const std::string& str)
 	MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &wstr[0], count);
 	return wstr;
 }
-
 
 PDGHelper::~PDGHelper()
 {

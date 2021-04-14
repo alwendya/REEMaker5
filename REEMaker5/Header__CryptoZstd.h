@@ -106,8 +106,8 @@ int decrypt(unsigned char* ciphertext, int ciphertext_len, unsigned char* key,
 #include "zstd_common.h"
 #include <xxh3.h>
 
-enum byteBlock : uint8_t { Fichier = 1, PaquetDebut = 2, PaquetFin = 4 };
-enum mesErreur : uint8_t { Conforme = 0, ErreurLecture = 1, ErreurEcriture = 2, ErreurCompression = 3, ErreurDecompression = 4, ErreurChaCha = 5, ErreurXXH3 = 6, ErreurAutre = 99 };
+enum class byteBlock : uint8_t { Fichier = 1, PaquetDebut = 2, PaquetFin = 4 };
+enum class mesErreur : uint8_t { Conforme = 0, ErreurLecture = 1, ErreurEcriture = 2, ErreurCompression = 3, ErreurDecompression = 4, ErreurChaCha = 5, ErreurXXH3 = 6, ErreurAutre = 99 };
 
 constexpr auto HeaderSize = 16;//szComp*4 + szUncomp*4 + szSHA256*8
 uint16_t MEM_read16(const void* memPtr)

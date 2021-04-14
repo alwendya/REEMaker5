@@ -125,6 +125,7 @@
       <AdditionalIncludeDirectories>include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <CallingConvention>StdCall</CallingConvention>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -145,6 +146,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <Optimization>MinSpace</Optimization>
+      <CallingConvention>StdCall</CallingConvention>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -174,6 +176,7 @@
     <ClInclude Include="Header__Font.h" />
     <ClInclude Include="Header__Function.h" />
     <ClInclude Include="Header__ImGUI_addon.h" />
+    <ClInclude Include="Header__PdgHelper.h" />
     <ClInclude Include="Header__WinToast.h" />
     <ClInclude Include="Header_Main.h" />
     <ClInclude Include="resource.h" />
