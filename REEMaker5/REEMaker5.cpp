@@ -1,4 +1,16 @@
-﻿#include "Header_Main.h"
+﻿/*
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+* ░▒▓	 _____           __  __       _               _____		▓▒░
+* ░▒▓	|  __ \         |  \/  |     | |             | ____|	▓▒░
+* ░▒▓	| |__) |___  ___| \  / | __ _| | _____ _ __  | |__		▓▒░
+* ░▒▓	|  _  // _ \/ _ \ |\/| |/ _` | |/ / _ \ '__| |___ \		▓▒░
+* ░▒▓	| | \ \  __/  __/ |  | | (_| |   <  __/ |     ___) |	▓▒░
+* ░▒▓	|_|  \_\___|\___|_|  |_|\__,_|_|\_\___|_|    |____/		▓▒░
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*  REEMaker 5 __ Grégory WENTZEL (c) 2021
+*/
+
+#include "Header_Main.h"
 #include "Header__Font.h"
 #include "Header__Function.h"
 #include "Header__FileHelper.h"
@@ -10,7 +22,7 @@ using namespace std;
 
 #define EPR
 
-// #Prototype
+// (っ◔◡◔)っ 𝙋𝙧𝙤𝙩𝙤𝙩𝙮𝙥𝙚 𝙛𝙤𝙣𝙘𝙩𝙞𝙤𝙣
 bool SauveParametres();
 bool ChargeParametres();
 bool GenereMiniature(int, int, int, std::wstring);
@@ -21,6 +33,7 @@ void MyMsg(int line, const char* fileName, const char* msg, ...);
 #define MY_TRACE(msg, ...) MyTrace(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
 #define MY_MSG(msg, ...) MyMsg(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
 
+// (っ◔◡◔)っ 𝘾𝙡𝙖𝙨𝙨𝙚𝙨 𝙚𝙩 𝙎𝙩𝙧𝙪𝙘𝙩𝙪𝙧𝙚𝙨
 class PDFError :public exception
 {
 public:
@@ -29,20 +42,31 @@ public:
 		return "Erreur de PDF";
 	}
 };
+struct Couleur
+{
+	string NomCouleur = "";
+	bool Locked = false;
+	ImVec4 CodeCouleur = { 0.0f,0.0f,0.0f,0.0f };
+};
+struct TextureSTB
+{
+	int my_image_width = 0;
+	int my_image_height = 0;
+	GLuint my_image_texture = 0;
+	bool my_image_success_loading = false;
+	std::string Chemin = "";
+};
 
+// (っ◔◡◔)っ 𝙑𝙖𝙧𝙞𝙖𝙗𝙡𝙚𝙨
+FileHelper fileHELPER(L"");
+PDGHelper mPDGHelper;
+ImVec4 clear_color = IMVEC4_COL16(115, 135, 150, 255);
+static ImVec2 BoutonSuivant(84.0f, 22.0f);
+HWND mHwnd;
 constexpr auto OpEnCoursWidth = 200.0f;
 constexpr auto OpEnCoursHeight = 200.0f;
 constexpr auto mFenWidth = 1280.0f;
 constexpr auto mFenHeight = 720.0f;
-static ImVec2 BoutonSuivant(84.0f, 22.0f);
-
-FileHelper fileHELPER(L"");
-// Mes vars internes
-bool show_demo_window = false;
-ImVec4 clear_color = IMVEC4_COL16(115, 135, 150, 255);
-
-HWND mHwnd;
-
 static std::string MessageOPENCours("Analyse du document en cours");
 static std::string MessagePercentOPENCours("12 %");
 static wstring CheminPDG(L"");
@@ -59,6 +83,22 @@ static wstring CheminPopplerPDFPPMTempOut(L"");
 static wstring CheminPopplerPDFPPMTempOutMini(L"");
 static wstring FichierPDFsortie(L"");
 static wstring CheminTemp(L"");
+static bool AfficheFenetreSpinner = false;
+static bool AfficheFenetreSpinnerthreadFolioSansPDG = false;
+static bool BoutonContinueCheminProcedure = false;
+static bool BoutonContinueReferenceProcedure = true;
+static bool AfficheReferenceProcedure = false;
+static bool BoutonContinueTrancheProcedure = true;
+static bool AfficheTrancheProcedure = false;
+static bool BoutonContinueFolioProcedure = true;
+static bool AfficheAnnuleFolioProcedure = false;
+static bool BoutonAfficheAnnuleFolioProcedure = true;
+static bool AfficheFolioProcedure = false;
+static std::string CheminPDForiginal("");
+static std::wstring wCheminPDForiginal(L"");
+static std::string CheminPDF("");
+static std::wstring wCheminPDF(L"");
+static std::string InformationPDF("");
 static vector<PoDoFo::PdfRect> vecMediaBox;
 static vector<int> vecRotation;
 static vector<string> ListePDGModele;
@@ -83,6 +123,7 @@ static bool isGenereMiniature = false;
 static bool isLoadingMiniature = false;
 static bool DemarreFoliotageTASK = false;
 static bool FoliotageGenerePDG = false;
+static bool show_demo_window = false;
 //GESTION TAB
 static bool TabFolio_ouvert = true;
 static bool TabPDG_ouvert = false;
@@ -92,12 +133,11 @@ static bool TabApropos_ouvert = false;
 static bool AllerVersPDG = false;
 static bool AllerVersFolio = false;
 static bool FoliotageEnCours = false;
-
+// Gestion miniature
 static int NombreCoeur = 2;
 static int GenereMiniaturefileCount = 0;
 static int MiniatureSelectionnee = 0;
 plf::nanotimer tmrGenereMiniature;
-
 /*  0=HautGauche 1=HautDroite(DEFAUT) 2=BasGauche 3=BasDroite*/
 static int radioEmplacementTampon = 1;
 static ImU16 margeEmplacementTamponX = 20;
@@ -106,34 +146,14 @@ static const ImU16   u16_one = 1, u16_fast = 10;//Réglage du Scalar
 static ImU16  u16_PageDebut = 1;
 static ImU16  u16_PageFin = 1;
 static ImU16  u16_PremierNumero = 3;
-
-struct Couleur
-{
-	string NomCouleur = "";
-	bool Locked = false;
-	ImVec4 CodeCouleur = { 0.0f,0.0f,0.0f,0.0f };
-};
-struct TextureSTB
-{
-	int my_image_width = 0;
-	int my_image_height = 0;
-	GLuint my_image_texture = 0;
-	bool my_image_success_loading = false;
-	std::string Chemin = "";
-};
 std::vector<TextureSTB> vecListeTexture;
 std::vector<TextureSTB> vecListeTextureMaxiPathOnly;
 static int CompteLoading = 0;
 TextureSTB mApercuTexture;
-
 vector<Couleur> ListeCouleur;
 static float sListeCouleurTranche[10][4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-PDGHelper mPDGHelper;
-
-// Main code
-//int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-
+// (っ◔◡◔)っ 𝙋𝙤𝙞𝙣𝙩 𝙚𝙣𝙩𝙧𝙚𝙚 𝙥𝙧𝙤𝙜𝙧𝙖𝙢𝙢𝙚
 int WINAPI wWinMain(
 	_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
@@ -151,24 +171,18 @@ int WINAPI wWinMain(
 	TCHAR path[4096];
 	DWORD length;
 	length = GetModuleFileName(NULL, path, 4096);
-	/*
-		Chemin de base de l'executable, fini par \
-	*/
-
+	/*	Chemin de base de l'executable, fini par \		*/
 	CheminBASE = path;
 	CheminBASE = CheminBASE.substr(0, CheminBASE.find_last_of(L"\\") + 1);
-
 	CheminPDG = CheminBASE + L"PDG_modele\\";
 	CheminPDGuser = CheminBASE + L"PDG_utilisateur\\";
-	CheminFontTampon = CheminBASE + L"Police\\RobotoMono-Regular.ttf";
-	//sCheminMONORoboto = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\RobotoMono-Regular.ttf";
-	sCheminMONORoboto = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\RobotoCondensed-Regular.ttf";
-	sCheminMONORobotoBold = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\RobotoCondensed-Bold.ttf";
-	sCheminMONORobotoBoldItalic = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\RobotoCondensed-BoldItalic.ttf";
-	sCheminMONORobotoItalic = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\RobotoCondensed-Italic.ttf";
+	CheminFontTampon = CheminBASE + L"Police\\Roboto-Regular.ttf";
+	sCheminMONORoboto = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\Roboto-Regular.ttf";
+	sCheminMONORobotoBold = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\Roboto-Bold.ttf";
+	sCheminMONORobotoBoldItalic = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\Roboto-BoldItalic.ttf";
+	sCheminMONORobotoItalic = fileHELPER.ConvertWideToANSI(CheminBASE) + "Police\\Roboto-Italic.ttf";
 	CheminCompacteRepare = CheminBASE + L"CompRepare\\CompacteRepareCommandLine.exe";
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
-
 	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
 
 	// TODO 1
@@ -214,7 +228,7 @@ int WINAPI wWinMain(
 	else
 	{
 		mPDGHelper.SetBaseModelePath(CheminPDG);
-		mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
+		mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
 		TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
 	}
 
@@ -244,25 +258,17 @@ int WINAPI wWinMain(
 	io.IniFilename = NULL;
 	ImGui::/*StyleColorsLightGreen*/StyleColorBlackWhite();
 	SDL_SetWindowMinimumSize(window, 1124, 720);
-	/*
-	* Get Hwnd
-	*/
-	struct SDL_SysWMinfo wmInfo;
-	SDL_VERSION(&wmInfo.version);
-	SDL_GetWindowWMInfo(window, &wmInfo);
-	mHwnd = wmInfo.info.win.window;
-
-	//FONT AWESOME merged with Droid
-	//ImFont* MYFont = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(droidSansFont_compressed_data, droidSansFont_compressed_size, 14.0f);
+	{	/*	* Get Hwnd	*/
+		struct SDL_SysWMinfo wmInfo;
+		SDL_VERSION(&wmInfo.version);
+		SDL_GetWindowWMInfo(window, &wmInfo);
+		mHwnd = wmInfo.info.win.window;
+	}
+	//FONT AWESOME merged with Roboto
 	ImFont* MYFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORoboto.c_str(), 14.0f);
 	static const ImWchar icons_ranges[] = { 0xf000, 0xf3ff, 0 }; // Will not be copied by AddFont* so keep in scope.
 	ImFontConfig config;
 	config.MergeMode = true;
-	//io.Fonts->AddFontFromMemoryCompressedTTF(FontAwesome4_compressed_data, FontAwesome4_compressed_size, 14.0f, &config, icons_ranges);// Merge into first font
-	//io.Fonts->Build();
-	//ImFont* MYFont20 = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(droidSansFont_compressed_data, droidSansFont_compressed_size, 20.0f);
-	//ImFont* MYFont14bold = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(DroidSansBold_compressed_data, DroidSansBold_compressed_size, 14.0f);
-	//ImFont* MYFont10bold = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(DroidSansBold_compressed_data, DroidSansBold_compressed_size, 10.0f);
 	io.Fonts->AddFontFromMemoryCompressedTTF(FontAwesome4_compressed_data, FontAwesome4_compressed_size, 14.0f, &config, icons_ranges);// Merge into first font
 	io.Fonts->Build();
 	ImFont* MYFont20 = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORoboto.c_str(), 20.0f);
@@ -270,23 +276,6 @@ int WINAPI wWinMain(
 	ImFont* MYFont10bold = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORobotoBold.c_str(), 10.0f);
 	ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
 	ImGui_ImplOpenGL2_Init();
-	static bool AfficheFenetreSpinner = false;
-	static bool AfficheFenetreSpinnerthreadFolioSansPDG = false;
-
-	static bool BoutonContinueCheminProcedure = false;
-	static bool BoutonContinueReferenceProcedure = true;
-	static bool AfficheReferenceProcedure = false;
-	static bool BoutonContinueTrancheProcedure = true;
-	static bool AfficheTrancheProcedure = false;
-	static bool BoutonContinueFolioProcedure = true;
-	static bool AfficheAnnuleFolioProcedure = false;
-	static bool BoutonAfficheAnnuleFolioProcedure = true;
-	static bool AfficheFolioProcedure = false;
-	static std::string CheminPDForiginal("");
-	static std::wstring wCheminPDForiginal(L"");
-	static std::string CheminPDF("");
-	static std::wstring wCheminPDF(L"");
-	static std::string InformationPDF("");
 	ListeCouleur.clear();
 	Couleur mCouleur;
 	{
@@ -1536,7 +1525,7 @@ int WINAPI wWinMain(
 									//Ouverture du fichier pour lecture
 									mPDGHelper.ClearList();
 									mPDGHelper.SetBaseModelePath(CheminPDG);
-									mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGModele[item_current_vPDG]));
+									mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGModele[item_current_vPDG]));
 								}
 							}
 							if (is_selected)
@@ -1560,7 +1549,7 @@ int WINAPI wWinMain(
 									//Ouverture du fichier pour lecture
 									mPDGHelper.ClearList();
 									mPDGHelper.SetBaseModelePath(CheminPDGuser);
-									mPDGHelper.OpenAndParseConfig(fileHELPER.ConvertUtf8ToWide(ListePDGUser[item_current_vPDGuser]));
+									mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGUser[item_current_vPDGuser]));
 								}
 							}
 							if (is_selected)
@@ -1586,6 +1575,7 @@ int WINAPI wWinMain(
 								else
 									ListePDGModele.push_back(p.path().filename().u8string());
 						}
+						ListePDGUser.clear();
 						for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
 						{
 							string pPathExtension = p.path().extension().string();
@@ -1605,9 +1595,9 @@ int WINAPI wWinMain(
 					ImGui::Text(mPDGHelper.DocumentOuvertUTF8().c_str());
 					ImGui::PopFont();
 					ImGui::SameLine();
-					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FLOPPY_O, u8" Sauvegarder cette page renseignée sur disque c:\\TestUnit\\")))
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FLOPPY_O, u8" Sauvegarder cette page renseignée sur disque")))
 					{
-						mPDGHelper.SauveDisque(L"c:\\TestUnit\\PDG_sauvé.txt");
+						ImGui::OpenPopup(u8"Choix du nom de la page de garde");
 					}
 					ImGui::SameLine();
 					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Creer cette page de garde en PDF")))
@@ -1623,7 +1613,7 @@ int WINAPI wWinMain(
 						PoDoFo::PdfPage* pPage = document.CreatePage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0));
 						PoDoFo::PdfPainter painter;
 						painter.SetPage(pPage);
-						int NBPageCree = mPDGHelper.DrawOnPage(painter, document);
+						int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
 						painter.FinishPage();
 						document.Close();
 					}
@@ -1685,6 +1675,25 @@ int WINAPI wWinMain(
 							AllerVersFolio = true;
 							FoliotageEnCours = false;
 						}
+					}
+					ImGui::SetNextWindowSize(ImVec2(400.0f, 140.0f));
+					if (ImGui::BeginPopupModal(u8"Choix du nom de la page de garde", NULL, ImGuiWindowFlags_NoResize))
+					{
+						static char NomPDGtxt[128];
+						ImGui::Text(u8"Saisir le nom sous lequel sera enregistré la page de garde utilisateur :");
+						ImGui::InputTextWithHint("##txtUnPDGtxtnom", u8"Maximum de 128 caractères", NomPDGtxt, 128);
+						if (ImGui::Button(u8"Sauvegarder la page de garde"))
+						{
+							mPDGHelper.BurstVersDisque(CheminPDGuser + fileHELPER.ConvertUtf8ToWide(std::string(NomPDGtxt)) + L".txt");
+							ImGui::CloseCurrentPopup();
+						}
+						ImGui::SameLine();
+						if (ImGui::Button(u8"Annuler l'opération"))
+						{
+							ImGui::CloseCurrentPopup();
+						}
+
+						ImGui::EndPopup();
 					}
 					ImGui::Separator();
 					/*
@@ -1870,8 +1879,10 @@ int WINAPI wWinMain(
 					ImGui::RadioButton(u8"En bas à gauche", &radioEmplacementTampon, 2); ImGui::SameLine();
 					ImGui::RadioButton(u8"En bas à droite", &radioEmplacementTampon, 3);
 					ImGui::Text(u8"Marge du tampon :"); ImGui::SameLine(); ImGui::Text(u8"Largeur en point : "); ImGui::SameLine();
+					ImGui::SetNextItemWidth(110.0f);
 					ImGui::InputScalar("##ScalarMargeX", ImGuiDataType_U16, &margeEmplacementTamponX, &u16_one, &u16_fast, "%u");
 					ImGui::SameLine(); ImGui::Text(u8"Hauteur en point : "); ImGui::SameLine();
+					ImGui::SetNextItemWidth(110.0f);
 					ImGui::InputScalar("##ScalarMargeY", ImGuiDataType_U16, &margeEmplacementTamponY, &u16_one, &u16_fast, "%u");
 					ImGui::EndTable();
 				}
@@ -1967,8 +1978,8 @@ Programme sous licence GPL 3
 	[Licence 'Zlib Licence'](https://en.wikipedia.org/wiki/Zlib_License/).
 
 ## Les polices suivantes sont utilisées :
-  * [Droid Sans par Steve Matteson](https://en.wikipedia.org/wiki/Steve_Matteson)
-	[Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
+  * [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
+	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
 
 ## Les icones suivants sont utilisés :
   * [Stamp Icon par DesignContest](http://www.designcontest.com/)
@@ -1979,9 +1990,7 @@ Programme sous licence GPL 3
 					{
 						std::string url(data_.link, data_.linkLength);
 						if (!data_.isImage)
-						{
 							ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
-						}
 					};
 					mdConfig.linkIcon = ICON_FA_LINK;
 					mdConfig.headingFormats[0] = { MYFont14bold, false };//H1 #
@@ -2067,8 +2076,7 @@ Programme sous licence GPL 3
 									}
 
 									PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
-									//PoDoFo::PdfFont* pFont = document.CreateFont("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), PoDoFo::PdfFontCache::eFontCreationFlags_AutoSelectBase14, true, fileHELPER.ConvertWideToANSI(CheminFont).c_str());
-									PoDoFo::PdfFont* pFont = document.CreateFontSubset("Droid Sans", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
+									PoDoFo::PdfFont* pFont = document.CreateFontSubset("Roboto", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
 									pFont->SetFontSize(TamponPolice);
 									for (size_t i = mStarting; i < mEnding; i++)
 									{
@@ -2345,14 +2353,12 @@ Programme sous licence GPL 3
 									MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
 									MessagePercentOPENCours = fmt::format("Tr.{}", t);
 									document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
-									//document.GetInfo()->SetAuthor(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Grégory WENTZEL"));
-									//document.GetInfo()->SetTitle(PoDoFo::PdfString("tampon foliotage REE"));
-									//document.GetInfo()->SetSubject(PoDoFo::PdfString("PDF vierge avec tampon"));
 									if (FoliotageGenerePDG)
 									{
 										mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[t][0]);
 										mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[t][1]);
 										mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[t][2]);
+										mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
 										mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
 										mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
 										mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
@@ -2360,7 +2366,7 @@ Programme sous licence GPL 3
 										PoDoFo::PdfPainter painter;
 										painter.SetPage(pPage);
 
-										int NBPageCree = mPDGHelper.DrawOnPage(painter, document);
+										int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
 										painter.FinishPage();
 									}
 									document.Write(TR_FichierPDFSortie.c_str());

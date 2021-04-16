@@ -1,4 +1,18 @@
-#pragma once
+﻿#pragma once
+/*
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+* ░▒▓       _    _      _                   ______               _   _					▓▒░
+* ░▒▓      | |  | |    | |                 |  ____|             | | (_)					▓▒░
+* ░▒▓      | |__| | ___| |_ __   ___ _ __  | |__ ___  _ __   ___| |_ _  ___  _ __		▓▒░
+* ░▒▓      |  __  |/ _ \ | '_ \ / _ \ '__| |  __/ _ \| '_ \ / __| __| |/ _ \| '_ \		▓▒░
+* ░▒▓      | |  | |  __/ | |_) |  __/ |    | | | (_) | | | | (__| |_| | (_) | | | |		▓▒░
+* ░▒▓      |_|  |_|\___|_| .__/ \___|_|    |_|  \___/|_| |_|\___|\__|_|\___/|_| |_|		▓▒░
+* ░▒▓				     | |															▓▒░
+* ░▒▓     			     |_|															▓▒░
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*  REEMaker 5 __ Grégory WENTZEL (c) 2021
+*/
+
 class SpinLock {
 	std::atomic_flag locked = ATOMIC_FLAG_INIT;
 public:
@@ -12,13 +26,12 @@ public:
 SpinLock sLock;
 size_t NombreCPU()
 {
-    SYSTEM_INFO systemInfo;
-    GetNativeSystemInfo(&systemInfo);
-    if (systemInfo.dwNumberOfProcessors == NULL)
-        return 2;
-    else
-        return systemInfo.dwNumberOfProcessors;
-
+	SYSTEM_INFO systemInfo;
+	GetNativeSystemInfo(&systemInfo);
+	if (systemInfo.dwNumberOfProcessors == NULL)
+		return 2;
+	else
+		return systemInfo.dwNumberOfProcessors;
 }
 
 size_t wsplit(const std::wstring& txt, std::vector<std::wstring>& strs, wchar_t ch)

@@ -1,7 +1,21 @@
+﻿/*
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+* ░▒▓	   ______          _														▓▒░
+* ░▒▓     |  ____|        | |       /\												▓▒░
+* ░▒▓     | |__ ___  _ __ | |_     /  \__      _____  ___  ___  _ __ ___   ___		▓▒░
+* ░▒▓     |  __/ _ \| '_ \| __|   / /\ \ \ /\ / / _ \/ __|/ _ \| '_ ` _ \ / _ \		▓▒░
+* ░▒▓     | | | (_) | | | | |_   / ____ \ V  V /  __/\__ \ (_) | | | | | |  __/		▓▒░
+* ░▒▓     |_|  \___/|_| |_|\__| /_/    \_\_/\_/ \___||___/\___/|_| |_| |_|\___|		▓▒░
+* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*  REEMaker 5 __ Grégory WENTZEL (c) 2021
+*
+* Pour utiliser des polices TTF par Freetype (meilleur rendu visuel sur petites tailles de polices)
+* Inclure imgui_freetype.cpp  et imgui_freetype.h
+* Ajouter
+*    #define IMGUI_ENABLE_FREETYPE
+* Dans le fichier imconfig.h file
+*/
 #pragma once
-
-//Utiliser imgui_freetype.cpp  et imgui_freetype.h
-// Add #define IMGUI_ENABLE_FREETYPE in your imconfig.h file
 
 // File: 'fontawesome-webfont.ttf' (165548 bytes)
 // Exported using binary_to_compressed_c.cpp
