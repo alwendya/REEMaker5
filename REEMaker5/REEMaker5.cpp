@@ -18,9 +18,10 @@
 #include "Header__ImGUI_addon.h"
 #include "Header__CryptoZstd.h"
 #include "Header__WinToast.h"
+#include "Header__FileWatcher.h"
 using namespace std;
 
-#define EPR
+//#define EPR
 
 // (っ◔◡◔)っ 𝙋𝙧𝙤𝙩𝙤𝙩𝙮𝙥𝙚 𝙛𝙤𝙣𝙘𝙩𝙞𝙤𝙣
 bool SauveParametres();
@@ -29,6 +30,7 @@ bool GenereMiniature(int, int, int, std::wstring);
 bool GenereMiniatureMIN(int, int, int, std::wstring);
 void MyTrace(int line, const char* fileName, const char* msg, ...);
 void MyMsg(int line, const char* fileName, const char* msg, ...);
+bool OuvrePDF(std::wstring);
 
 #define MY_TRACE(msg, ...) MyTrace(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
 #define MY_MSG(msg, ...) MyMsg(__LINE__, __FILE__, msg"\n", __VA_ARGS__)
@@ -61,7 +63,7 @@ struct TextureSTB
 FileHelper fileHELPER(L"");
 PDGHelper mPDGHelper;
 ImVec4 clear_color = IMVEC4_COL16(115, 135, 150, 255);
-static ImVec2 BoutonSuivant(84.0f, 22.0f);
+static ImVec2 BoutonSuivant(130.0f, 22.0f);
 HWND mHwnd;
 constexpr auto OpEnCoursWidth = 200.0f;
 constexpr auto OpEnCoursHeight = 200.0f;
@@ -94,6 +96,18 @@ static bool BoutonContinueFolioProcedure = true;
 static bool AfficheAnnuleFolioProcedure = false;
 static bool BoutonAfficheAnnuleFolioProcedure = true;
 static bool AfficheFolioProcedure = false;
+static bool SetEnterTextKeyboardSavePDGtodisk = false;
+
+static bool AfficheModalAvancementFoliotage = false;
+static bool AfficheModalAvancementFoliotageSansPdg = false;
+static bool AfficheModalGenerePageDeGarde = false;
+static bool AfficheModalSupprimePageDeGarde = false;
+static bool AfficheModalAnnulationDeFolio = false;
+static bool AfficheModalNomPageDeGarde = false;
+
+static bool bOpenPDF = false;
+
+
 static std::string CheminPDForiginal("");
 static std::wstring wCheminPDForiginal(L"");
 static std::string CheminPDF("");
@@ -105,12 +119,15 @@ static vector<string> ListePDGModele;
 static vector<string> ListePDGUser;
 static string pdgClassSEED = "";
 static int item_current_vPDG = 0;
-static int item_current_vPDGuser = 0;
+static int item_current_vPDGuser = -1;
 static char  txtSpinner[2] = "\0";
+static char NomPDGtxt[128];
 static char NomSite[32];
 static char TrancheCode[10][6];
 static char strREFERENCEREE[32] = "";
 static char strINDICEREE[5] = "";
+static char strINDICEREE_pdg[5] = "";
+static char NomSite_pdg[32];
 static bool TrancheSelect[10];
 static bool ThemeSombre = false;
 static bool tabFolioter = true;
@@ -152,6 +169,7 @@ static int CompteLoading = 0;
 TextureSTB mApercuTexture;
 vector<Couleur> ListeCouleur;
 static float sListeCouleurTranche[10][4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+static std::vector<std::wstring> LogErreur;
 
 // (っ◔◡◔)っ 𝙋𝙤𝙞𝙣𝙩 𝙚𝙣𝙩𝙧𝙚𝙚 𝙥𝙧𝙤𝙜𝙧𝙖𝙢𝙢𝙚
 int WINAPI wWinMain(
@@ -185,8 +203,6 @@ int WINAPI wWinMain(
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
 	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
 
-	// TODO 1
-
 	try
 	{
 		filesystem::create_directories(CheminTemp);
@@ -199,6 +215,7 @@ int WINAPI wWinMain(
 	ListePDGModele.clear();
 	pdgClassSEED = sGenerate(12);
 	item_current_vPDG = 0;
+	item_current_vPDGuser = -1;
 	for (const auto& p : filesystem::directory_iterator(CheminPDG))
 	{
 		string pPathExtension = p.path().extension().string();
@@ -220,10 +237,12 @@ int WINAPI wWinMain(
 		if (pPathExtension == ".txt")
 			ListePDGUser.push_back(p.path().filename().u8string());
 	}
+	if (item_current_vPDGuser == -1 && ListePDGUser.size() > 0)
+		item_current_vPDGuser = 0;
 
 	if (ListePDGModele.size() == 0)
 	{
-		// TODO 1
+		// On part du principe que c'est une installation par les Admin, donc les pages de gardes modèle sont installé et ne peuvent être supprimé par l'utilisateur
 	}
 	else
 	{
@@ -256,7 +275,6 @@ int WINAPI wWinMain(
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.IniFilename = NULL;
-	ImGui::/*StyleColorsLightGreen*/StyleColorBlackWhite();
 	SDL_SetWindowMinimumSize(window, 1124, 720);
 	{	/*	* Get Hwnd	*/
 		struct SDL_SysWMinfo wmInfo;
@@ -306,6 +324,7 @@ int WINAPI wWinMain(
 	std::vector<char> vecChar;
 	vecChar.resize(4);
 	bool done = false;
+	static bool SlowDown = false;
 	while (!done)
 	{
 		SDL_Event event;
@@ -324,69 +343,120 @@ int WINAPI wWinMain(
 					}
 					break;
 				case SDL_WINDOWEVENT_SHOWN:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d shown", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_HIDDEN:
+				{
+					SlowDown = true;
 					MY_MSG("MSG: Window %d hidden", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_EXPOSED:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d exposed", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_MOVED:
+				{
 					MY_MSG("MSG: Window %d moved to %d,%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_RESIZED:
+				{
 					MY_MSG("MSG: Window %d resized to %dx%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_SIZE_CHANGED:
+				{
 					MY_MSG("MSG: Window %d size changed to %dx%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_MINIMIZED:
+				{
+					SlowDown = true;
 					MY_MSG("MSG: Window %d minimized", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_MAXIMIZED:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d maximized", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_RESTORED:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d restored", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_ENTER:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Mouse entered window %d",
 						event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_LEAVE:
+				{
+					SlowDown = true;
 					MY_MSG("MSG: Mouse left window %d", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_FOCUS_GAINED:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d gained keyboard focus",
 						event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_FOCUS_LOST:
+				{
+					SlowDown = true;
 					MY_MSG("MSG: Window %d lost keyboard focus",
 						event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_TAKE_FOCUS:
+				{
+					SlowDown = false;
 					MY_MSG("MSG: Window %d is offered a focus", event.window.windowID);
-					break;
+				}
+				break;
 				case SDL_WINDOWEVENT_HIT_TEST:
+				{
 					MY_MSG("MSG: Window %d has a special hit test", event.window.windowID);
-					break;
+				}
+				break;
 				default:
+				{
 					MY_MSG("MSG: Window %d got unknown event %d",
 						event.window.windowID, event.window.event);
-					break;
+				}
+				break;
 				}
 			}
 		}
+		if (ThemeSombre)
+			ImGui::StyleColorsDarkCharcoal();
+		else
+			ImGui::StyleColorsLight();
+		if (SlowDown)
+			std::this_thread::sleep_for(120ms);
 		ImGui_ImplOpenGL2_NewFrame();
 		ImGui_ImplSDL2_NewFrame(window);
 		ImGui::NewFrame();
+		static int width;
+		static int height;
 		{
 			sprintf_s(txtSpinner, 2, "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
 			txtSpinner[1] = '\0';
@@ -396,17 +466,21 @@ int WINAPI wWinMain(
 				╚  ╚═╝╝╚╝╚═╝ ╩ ╩╚═╚═╝  ╩  ╩╚═╩╝╚╝╚═╝╩╩  ╩ ╩╩═╝╚═╝
 			*/
 			ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-			int width;
-			int height;
+			static float HauteurBarrePrincipale = 30.0f;
+			static float HauteurBarreSeconde = 34.0f;
 			SDL_GetWindowSize(window, &width, &height);
 			ImGui::SetNextWindowSize(ImVec2((float)width, (float)height));
 			ImGui::Begin("Fenètre principale", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);// Create a window called "Hello, world!" and append into it.
+			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(0.0, 0.0), ImVec2(width, HauteurBarrePrincipale - 1.0f),
+				ImGui::ColorConvertFloat4ToU32(ThemeSombre ? IMVEC4_COL16(255, 255, 255, 30) : IMVEC4_COL16(200, 200, 200, 200)));
 #pragma region BoutonTAB
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 4.0);
 			if (TabFolio_ouvert)
 			{
-				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
 				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Folioter un REE")))
 				{
 					TabFolio_ouvert = true;
@@ -428,11 +502,11 @@ int WINAPI wWinMain(
 				}
 				ImGui::PopStyleColor();
 			}
-			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 10.0f);
 
 			if (TabPDG_ouvert)
 			{
-				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
 				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_TEXT_O, u8" Page de garde")))
 				{
 					TabFolio_ouvert = false;
@@ -454,11 +528,11 @@ int WINAPI wWinMain(
 				}
 				ImGui::PopStyleColor();
 			}
-			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 10.0f);
 
 			if (TabCouleur_ouvert)
 			{
-				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
 				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_COGS, u8" Options")))
 				{
 					TabFolio_ouvert = false;
@@ -480,11 +554,11 @@ int WINAPI wWinMain(
 				}
 				ImGui::PopStyleColor();
 			}
-			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 6.0f);
+			ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 10.0f);
 
 			if (TabApropos_ouvert)
 			{
-				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
 				if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_INFO, u8" A propos")))
 				{
 					TabFolio_ouvert = false;
@@ -507,7 +581,9 @@ int WINAPI wWinMain(
 				ImGui::PopStyleColor();
 			}
 			ImGui::PopStyleVar();
+			ImGui::PopStyleVar();
 #pragma endregion
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 5.0);
 			ImGui::Separator();
 
 			if (AllerVersFolio)
@@ -542,8 +618,7 @@ int WINAPI wWinMain(
 						AfficheFenetreSpinner = true;
 						MessageOPENCours = fmt::format("Analyse du document PDF.");
 						MessagePercentOPENCours = "";
-						ImGui::OpenPopup("Avancement##TABfolioteruneprocedure");
-
+						AfficheModalAvancementFoliotage = true;
 						HRESULT hr;
 						CComPtr<IFileOpenDialog> pDlg;
 						COMDLG_FILTERSPEC aFileTypes[] = {
@@ -659,19 +734,38 @@ int WINAPI wWinMain(
 													PdfVErsionToString = "PDF Version Inconnu";
 													break;
 												}
-												string pdfDETAIL = "";
+												std::string pdfDETAIL = u8"<vide>";
+												std::string sAuteur = u8"<vide>";
+												std::string sCreePar = u8"<vide>";
+												std::string sDateTime = u8"<vide>";
 												try
 												{
-													//PoDoFo::PdfString podofoDate("");
-													//documentSource.GetInfo()->GetCreationDate().ToString(podofoDate);
-													string sDATETIME = fmt::format(u8"{:%Y/%m/%d %H:%M:%S}", fmt::localtime(documentSource.GetInfo()->GetCreationDate().GetTime()));
-													pdfDETAIL = fmt::format(u8"Auteur : {}, Crée par : {}, Le {}", documentSource.GetInfo()->GetAuthor().GetStringUtf8(), documentSource.GetInfo()->GetCreator().GetStringUtf8(), sDATETIME);
+													sDateTime = fmt::format(u8"{:%Y/%m/%d %H:%M:%S}", fmt::localtime(documentSource.GetInfo()->GetCreationDate().GetTime()));
 												}
 												catch (const std::exception&)
 												{
-													pdfDETAIL = "Impossible d'avoir les informations du documents...";
 												}
-
+												try
+												{
+													sAuteur = documentSource.GetInfo()->GetAuthor().GetStringUtf8();
+													if (sAuteur.length() > 20)
+														sAuteur = sAuteur.substr(0, 20);
+													if (sAuteur == "") sAuteur = u8"<vide>";
+												}
+												catch (const std::exception&)
+												{
+												}
+												try
+												{
+													sCreePar = documentSource.GetInfo()->GetCreator().GetStringUtf8();
+													if (sCreePar.length() > 20)
+														sCreePar = sCreePar.substr(0, 20);
+													if (sCreePar == "") sCreePar = u8"<vide>";
+												}
+												catch (const std::exception&)
+												{
+												}
+												pdfDETAIL = fmt::format(u8"Auteur : {}, Crée par : {}, Le {}", sAuteur, sCreePar, sDateTime);
 												InformationPDF = fmt::format(u8" {} page(s) pour {} Mo [{}, {}]", nbPages, filesystem::file_size(wCheminPDF) / 1024 / 1024, PdfVErsionToString, pdfDETAIL);
 												memcpy_s(strCHEMINPROCEDURE, CheminPDForiginal.size(), &CheminPDForiginal[0], CheminPDForiginal.size());
 												strCHEMINPROCEDURE[CheminPDForiginal.size()] = '\0';
@@ -727,7 +821,7 @@ int WINAPI wWinMain(
 
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
-					if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueCheminProcedure"), BoutonContinueCheminProcedure, BoutonSuivant))
+					if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Etape suivante##BoutonContinueCheminProcedure"), BoutonContinueCheminProcedure, BoutonSuivant))
 					{
 						BoutonContinueCheminProcedure = false;
 						AfficheReferenceProcedure = true;
@@ -778,7 +872,7 @@ int WINAPI wWinMain(
 							else
 								BoutonContinueReferenceProcedure = false;
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - BoutonSuivant.x - 2.0f);
-						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, " Continuer##BoutonContinueReferenceProcedure"), BoutonContinueReferenceProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, " Etape suivante##BoutonContinueReferenceProcedure"), BoutonContinueReferenceProcedure, BoutonSuivant))
 						{
 							BoutonContinueReferenceProcedure = false;
 							AfficheFolioProcedure = true;
@@ -794,9 +888,15 @@ int WINAPI wWinMain(
 						ImGui::PopFont();
 						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si la procédure est folioté en totalitée ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné."); /*ImGui::Text("");*/
 
-						ImGui::RadioButton("Foliotage total", &radioTotalPartiel, 0); ImGui::SameLine();
+						int cpChoix = radioTotalPartiel;
+
+						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+						ImGui::RadioButton("Foliotage total", AfficheAnnuleFolioProcedure ? &cpChoix : &radioTotalPartiel, 0); ImGui::SameLine();
+						ImGui::PopStyleVar();
 						ImGui::Text("     "); ImGui::SameLine();
-						ImGui::RadioButton("Foliotage partiel", &radioTotalPartiel, 1);
+						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+						ImGui::RadioButton("Foliotage partiel", AfficheAnnuleFolioProcedure ? &cpChoix : &radioTotalPartiel, 1);
+						ImGui::PopStyleVar();
 						if (radioTotalPartiel == 1)
 						{
 							ImGui::SameLine(); ImGui::Text("  "); ImGui::SameLine();
@@ -825,7 +925,7 @@ int WINAPI wWinMain(
 
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
-						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonContinueFolioProcedure"), BoutonContinueFolioProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Etape suivante##BoutonContinueFolioProcedure"), BoutonContinueFolioProcedure, BoutonSuivant))
 						{
 							BoutonContinueFolioProcedure = false;
 							AfficheAnnuleFolioProcedure = true;
@@ -859,7 +959,7 @@ int WINAPI wWinMain(
 							{
 								FolioProcedureAAnnulerBKUP[zz] = FolioProcedureAAnnuler[zz];
 							}
-							ImGui::OpenPopup("Annulation de folio##AnnulationFolio");
+							AfficheModalAnnulationDeFolio = true;
 							//THREAD
 							std::thread tTHREAD([]() {
 								{
@@ -978,7 +1078,7 @@ int WINAPI wWinMain(
 								nbCancel++;
 						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_TIMES, fmt::format(u8"  {} folio(s) annulée(s)", nbCancel)));
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
-						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Continuer##BoutonAfficheAnnuleFolioProcedure"), BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
+						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Etape suivante##BoutonAfficheAnnuleFolioProcedure"), BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
 						{
 							BoutonAfficheAnnuleFolioProcedure = false;
 							AfficheTrancheProcedure = true;
@@ -1201,7 +1301,7 @@ int WINAPI wWinMain(
 										CustomCheminPDF += L"_foliotée";
 										pDlg->SetFileName(CustomCheminPDF.c_str());
 										pDlg->SetDefaultExtension(L"pdf");
-										hr = pDlg->Show(NULL);
+										hr = pDlg->Show(mHwnd);
 										if (SUCCEEDED(hr))
 										{
 											CComPtr<IShellItem> pItem;
@@ -1232,271 +1332,6 @@ int WINAPI wWinMain(
 								ImGui::EndTable();
 							}
 					}
-					ImGui::SetNextWindowSize(ImVec2(ImGui::GetContentRegionMax().x - 100.0f, ImGui::GetContentRegionMax().y - 100.0f));
-
-					if (ImGui::BeginPopupModal("Annulation de folio##AnnulationFolio", NULL, ImGuiWindowFlags_NoResize))
-					{
-						if (ImGui::BeginTable("##tableAnnulationFolio", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 30.0f)))
-						{
-							ImGui::TableNextRow();
-							ImGui::TableSetColumnIndex(0);
-							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-							if (ImGuiAl::Button(u8"Valider le choix des folio(s) à annuler", (!isGenereMiniature && !isLoadingMiniature), ImVec2(-1.0f, 30.0f)))
-							{
-								for (size_t zz = 0; zz < 9999; zz++)//On transfert cette fenetre dans l'original
-									FolioProcedureAAnnuler[zz] = FolioProcedureAAnnulerBKUP[zz];
-								MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
-								glDeleteTextures(1, &mApercuTexture.my_image_texture);
-								for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
-									glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
-								ImGui::CloseCurrentPopup();
-							}
-							ImGui::PopStyleVar();
-
-							ImGui::TableSetColumnIndex(1);
-							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-							if (ImGuiAl::Button(u8"Ne pas annuler de folio", true, ImVec2(-1.0f, 30.0f)))
-							{
-								MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
-								glDeleteTextures(1, &mApercuTexture.my_image_texture);
-								for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
-									glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
-
-								ImGui::CloseCurrentPopup();
-							}
-							ImGui::PopStyleVar();
-							ImGui::EndTable();
-						}
-						if (isGenereMiniature || isLoadingMiniature)
-						{
-							//progress
-							if (isGenereMiniature)
-							{
-								//GET NBFiles
-								if (tmrGenereMiniature.get_elapsed_ms() > 2000)
-								{
-									tmrGenereMiniature.start();
-									{
-										try
-										{
-											auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOut);
-											GenereMiniaturefileCount = (int)std::count_if(
-												begin(dirIter),
-												end(dirIter),
-												[](auto& entry) { return entry.is_regular_file(); }
-											);								//
-										}
-										catch (const std::exception& e)
-										{
-											MY_TRACE("Exception a la ligne:  %s", e.what());
-										}
-									}
-									{
-										try
-										{
-											auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOutMini);
-											GenereMiniaturefileCount += (int)std::count_if(
-												begin(dirIter),
-												end(dirIter),
-												[](auto& entry) { return entry.is_regular_file(); }
-											);								//
-										}
-										catch (const std::exception& e)
-										{
-											MY_TRACE("Exception a la ligne:  %s", e.what());
-										}
-									}
-								}
-								ImGui::Text(u8"Génération apercu :");
-								ImGui::SameLine();
-								std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", (GenereMiniaturefileCount / 2));
-								float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)(GenereMiniaturefileCount / 2)) / 100.0f;
-								ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
-							}
-							else
-							{
-								ImGui::Text(u8"Génération apercu :");
-								ImGui::SameLine();
-								std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", vecMediaBox.size());
-								ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
-							}
-							if (isLoadingMiniature && !isGenereMiniature)
-							{
-								ImGui::Text(u8"Miniatures chargées en mémoire : ");
-								ImGui::SameLine();
-								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", CompteLoading);
-								float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)CompteLoading) / 100.0f;
-								ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
-								bool AllDone = true;
-								int CasseLoading = 0;
-								for (size_t iDtex = 0; iDtex < vecListeTexture.size(); iDtex++)
-								{
-									if (!vecListeTexture[iDtex].my_image_success_loading)
-									{
-										AllDone = false;
-										int my_image_width = 0;
-										int my_image_height = 0;
-										GLuint my_image_texture = 0;
-										vecListeTexture[iDtex].my_image_success_loading = LoadTextureFromFile(vecListeTexture[iDtex].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
-										vecListeTexture[iDtex].my_image_width = my_image_width;
-										vecListeTexture[iDtex].my_image_height = my_image_height;
-										vecListeTexture[iDtex].my_image_texture = my_image_texture;
-										CompteLoading++;
-										CasseLoading++;
-										if (CasseLoading > 60)
-											break;
-									}
-								}
-								if (AllDone)
-								{
-									isLoadingMiniature = false;
-									//On precharge la premiere image
-									int my_image_width = 0;
-									int my_image_height = 0;
-									GLuint my_image_texture = 0;
-									mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[0].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
-									mApercuTexture.my_image_width = my_image_width;
-									mApercuTexture.my_image_height = my_image_height;
-									mApercuTexture.my_image_texture = my_image_texture;
-									MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
-								}
-							}
-							else if (isLoadingMiniature && isGenereMiniature)
-							{
-								ImGui::Text(u8"Miniatures chargées en mémoire : ");
-								ImGui::SameLine();
-								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", 0);
-								ImGui::ProgressBar(0.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
-							}
-							else
-							{
-								ImGui::Text(u8"Miniatures chargées en mémoire  : ");
-								ImGui::SameLine();
-								std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", vecMediaBox.size());
-								ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
-							}
-						}
-
-						if (!isLoadingMiniature && !isGenereMiniature)
-						{
-							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-							if (ImGui::Button(u8"Tout sélectionner"))
-								for (size_t ze = 0; ze < 9999; ze++)
-									FolioProcedureAAnnulerBKUP[ze] = true;
-							ImGui::SameLine();
-							if (ImGui::Button(u8"Tout désélectionner"))
-								for (size_t ze = 0; ze < 9999; ze++)
-									FolioProcedureAAnnulerBKUP[ze] = false;
-							ImGui::PopStyleVar();
-							if (ImGui::BeginTable("##tablePreview", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 100.0f)))
-							{
-								ImGui::TableSetupColumn("Actions##Actions", ImGuiTableColumnFlags_WidthStretch, 0);
-								ImGui::TableSetupColumn("Image##Image", ImGuiTableColumnFlags_WidthFixed, 700.0f, 1);
-								ImGui::TableNextRow();
-								ImGui::TableSetColumnIndex(0);
-								if ((!isGenereMiniature && !isLoadingMiniature))
-								{
-									ImGui::TableNextRow();
-									ImGui::TableSetColumnIndex(0);
-									if (ImGui::BeginTable("##tableCKBOX", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 30.0f /*- 100.0f*/)))
-									{
-										ImGui::TableSetupColumn("ckb##__ckb", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
-										ImGui::TableNextRow();
-										ImGui::TableSetColumnIndex(0);
-										int  DummyCount = 0;
-										for (size_t colLs = 0; colLs < vecListeTexture.size(); colLs++)
-										{
-											ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-											ImGui::Checkbox(fmt::format(u8"##Page {}", colLs).c_str(), &FolioProcedureAAnnulerBKUP[colLs]);
-											ImGui::SameLine();
-											const bool mSelected = false;
-
-											bool InfoIsItemVisible = ImGui::IsItemVisible();
-											if (InfoIsItemVisible)
-											{
-												if (ImGui::Selectable(fmt::format("##selec{}", colLs).c_str(), mSelected, ImGuiSelectableFlags_None, ImVec2(0.0f, 56.0f)))
-												{
-													if (colLs == MiniatureSelectionnee)
-													{
-														//Deja chargee
-													}
-													else
-													{
-														//On doit chargée
-														MiniatureSelectionnee = colLs;
-														MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
-														glDeleteTextures(1, &mApercuTexture.my_image_texture);
-														int my_image_width = 0;
-														int my_image_height = 0;
-														GLuint my_image_texture = 0;
-														mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[MiniatureSelectionnee].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
-														mApercuTexture.my_image_width = my_image_width;
-														mApercuTexture.my_image_height = my_image_height;
-														mApercuTexture.my_image_texture = my_image_texture;
-														MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
-													}
-												}
-												ImGui::SameLine();
-												ImGui::Image((void*)(intptr_t)vecListeTexture[colLs].my_image_texture, ImVec2(vecListeTexture[colLs].my_image_width, vecListeTexture[colLs].my_image_height));
-												ImGui::PopStyleVar();
-												ImGui::SameLine();
-#ifdef NDEBUG
-												ImGui::Text(fmt::format(u8"Page {}", colLs + 1).c_str());
-#else
-												ImGui::Text(fmt::format(u8"Page {} (GluID {})", colLs + 1, to_string(vecListeTexture[colLs].my_image_texture)).c_str());
-#endif // NDEBUG
-											}
-											else
-											{
-												ImGui::PopStyleVar();
-												DummyCount++;
-												ImGui::Dummy(ImVec2(-1.0f, 64.0f));
-											}
-										}
-										ImGui::EndTable();
-									}
-									ImGui::TableSetColumnIndex(1);
-#ifdef NDEBUG
-									ImGui::Text(fmt::format(u8"Apercu de la page {}", MiniatureSelectionnee + 1).c_str());
-#else
-									ImGui::Text(fmt::format(u8"Apercu de la page {} (GluID {})", MiniatureSelectionnee + 1, to_string(mApercuTexture.my_image_texture)).c_str());
-#endif // NDEBUG
-									if (ImGui::BeginTable("##tableMaxPV", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 30.0f /*- 100.0f*/)))
-									{
-										ImGui::TableSetupColumn("MaxPV##__mxPV", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
-										ImGui::TableNextRow();
-										ImGui::TableSetColumnIndex(0);
-										ImGui::Image((void*)(intptr_t)mApercuTexture.my_image_texture, ImVec2(mApercuTexture.my_image_width, mApercuTexture.my_image_height));
-										ImGui::EndTable();
-									}
-								}
-
-								ImGui::EndTable();
-							}
-						}
-						ImGui::EndPopup();
-					}
-
-					ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
-					if (ImGui::BeginPopupModal("Avancement##TABfolioteruneprocedure", NULL, ImGuiWindowFlags_NoResize))
-					{
-						ImGui::Text("");
-						ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
-						ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
-						ImGui::SameLine();
-						ImGui::PushFont(MYFont20);
-						ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
-						ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
-						ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
-						ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
-						ImGui::PopFont();
-
-						ImGui::TextWrapped(MessageOPENCours.c_str());
-
-						if (AfficheFenetreSpinner == false)
-							ImGui::CloseCurrentPopup();
-						ImGui::EndPopup();
-					}
 					ImGui::EndTable();
 				}
 			}
@@ -1508,11 +1343,19 @@ int WINAPI wWinMain(
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
-					ImGui::Text(u8"Charger un modèle : ");
+					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_DATABASE, u8""));
+					ImGui::SameLine();
+					ImGui::PushFont(MYFont14bold);
+					ImGui::Text(u8" Base de modèle");
+					ImGui::PopFont();
+					ImGui::SameLine();
+					ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+					ImGui::SameLine();
+					ImGui::Text(u8"Intégré :");
 					ImGui::SameLine();
 					const char* combo_labelPDGModele = ListePDGModele[item_current_vPDG].c_str();  // Label to preview before opening the combo (technically it could be anything)
-					const char* combo_labelPDGUser = ListePDGUser[item_current_vPDGuser].c_str();  // Label to preview before opening the combo (technically it could be anything)
-					ImGui::SetNextItemWidth(220.0f);
+					const char* combo_labelPDGUser = (item_current_vPDGuser == -1) ? "" : ListePDGUser[item_current_vPDGuser].c_str();  // Label to preview before opening the combo (technically it could be anything)
+					ImGui::SetNextItemWidth(250.0f);
 					if (ImGui::BeginCombo("##CBBoxModelePDG", combo_labelPDGModele, 0 /*flags*/))
 					{
 						for (int n = 0; n < ListePDGModele.size(); n++)
@@ -1534,9 +1377,11 @@ int WINAPI wWinMain(
 						ImGui::EndCombo();
 					}
 					ImGui::SameLine();
-					ImGui::Text(u8"Charger une page de garde utilisateur : ");
+					ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 					ImGui::SameLine();
-					ImGui::SetNextItemWidth(220.0f);
+					ImGui::Text(u8"Utilisateur :");
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(300.0f);
 					if (ImGui::BeginCombo("##CBBoxPDGutilisateur", combo_labelPDGUser, 0 /*flags*/))
 					{
 						for (int n = 0; n < ListePDGUser.size(); n++)
@@ -1558,153 +1403,33 @@ int WINAPI wWinMain(
 						ImGui::EndCombo();
 					}
 					ImGui::SameLine();
-					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_RECYCLE, u8" Rafraichir la liste des pages de gardes")))
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_TRASH, u8" Supprimer cette page de garde utilisateur")))
 					{
-						ListePDGModele.clear();
-						pdgClassSEED = sGenerate(12);
-						item_current_vPDG = 0;
-						for (const auto& p : filesystem::directory_iterator(CheminPDG))
-						{
-							string pPathExtension = p.path().extension().string();
-							transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
-							string pPathFileName = p.path().filename().string();
-							transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
-							if (pPathExtension == ".txt")
-								if (pPathFileName == "page de garde standard.txt")
-									ListePDGModele.insert(ListePDGModele.begin() + 0, p.path().filename().u8string());
-								else
-									ListePDGModele.push_back(p.path().filename().u8string());
-						}
-						ListePDGUser.clear();
-						for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
-						{
-							string pPathExtension = p.path().extension().string();
-							transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
-							string pPathFileName = p.path().filename().string();
-							transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
-							if (pPathExtension == ".txt")
-								ListePDGUser.push_back(p.path().filename().u8string());
-						}
+						if (ListePDGUser.size() >= 0 && item_current_vPDGuser != -1)
+							AfficheModalSupprimePageDeGarde = true;
 					}
+					ImGui::PopStyleVar();
 					ImGui::Separator();
 					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
-					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Document ouvert : ").c_str()));
+					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Vous utilisez : ").c_str()));
 					ImGui::SameLine();
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(mPDGHelper.DocumentOuvertUTF8().c_str());
 					ImGui::PopFont();
-					ImGui::SameLine();
-					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FLOPPY_O, u8" Sauvegarder cette page renseignée sur disque")))
-					{
-						ImGui::OpenPopup(u8"Choix du nom de la page de garde");
-					}
-					ImGui::SameLine();
-					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Creer cette page de garde en PDF")))
-					{
-						PoDoFo::PdfStreamedDocument document("c:\\TestUnit\\outsy_bitsy.pdf");
-						mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[3][0]);
-						mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[3][1]);
-						mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[3][2]);
-						mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(3);
-						mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
-						mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
-						mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
-						PoDoFo::PdfPage* pPage = document.CreatePage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0));
-						PoDoFo::PdfPainter painter;
-						painter.SetPage(pPage);
-						int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
-						painter.FinishPage();
-						document.Close();
-					}
-					if (FoliotageEnCours)
-					{
-						ImGui::SameLine();
-						ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-						ImGui::SameLine();
-						ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 225.0f);
-						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_CHECK_SQUARE, u8" Démarrer le foliotage")))
-						{
-							DemarreFoliotageTASK = false;
-							//Sauvegarder sous
-
-							HRESULT hr;
-							CComPtr<IFileSaveDialog> pDlg;
-							COMDLG_FILTERSPEC aFileTypes[] = { { L"Fichier PDF", L"*.pdf" } };
-							hr = pDlg.CoCreateInstance(__uuidof(FileSaveDialog));
-							if (FAILED(hr))
-								break;
-							pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
-							pDlg->SetTitle(L"Enregistrer la procédure foliotée avec page de garde");
-							pDlg->SetOkButtonLabel(L"&Sauvegarder");
-							wstring CustomCheminPDF = wCheminPDForiginal;
-							CustomCheminPDF = CustomCheminPDF.substr(0, CustomCheminPDF.length() - 4);
-							CustomCheminPDF += L"_foliotée";
-							pDlg->SetFileName(CustomCheminPDF.c_str());
-							pDlg->SetDefaultExtension(L"pdf");
-							hr = pDlg->Show(NULL);
-							if (SUCCEEDED(hr))
-							{
-								CComPtr<IShellItem> pItem;
-								hr = pDlg->GetResult(&pItem);
-								if (SUCCEEDED(hr))
-								{
-									LPOLESTR pwsz = NULL;
-									hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
-									if (SUCCEEDED(hr))
-									{
-										DemarreFoliotageTASK = true;
-										FoliotageGenerePDG = true;//Ce sera un foliotage sans page de garde
-										AllerVersFolio = true;
-										FoliotageEnCours = false;
-										FichierPDFsortie = wstring(pwsz);
-										MY_MSG("MSG: Enregistrer sous %s", string(FichierPDFsortie.begin(), FichierPDFsortie.end()));
-										CoTaskMemFree(pwsz);
-									}
-								}
-							}
-							else
-							{
-								DemarreFoliotageTASK = false;
-								FichierPDFsortie = L"";
-							}
-						}
-						ImGui::SameLine();
-						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_UNDO, u8" Annuler")))
-						{
-							AllerVersFolio = true;
-							FoliotageEnCours = false;
-						}
-					}
-					ImGui::SetNextWindowSize(ImVec2(400.0f, 140.0f));
-					if (ImGui::BeginPopupModal(u8"Choix du nom de la page de garde", NULL, ImGuiWindowFlags_NoResize))
-					{
-						static char NomPDGtxt[128];
-						ImGui::Text(u8"Saisir le nom sous lequel sera enregistré la page de garde utilisateur :");
-						ImGui::InputTextWithHint("##txtUnPDGtxtnom", u8"Maximum de 128 caractères", NomPDGtxt, 128);
-						if (ImGui::Button(u8"Sauvegarder la page de garde"))
-						{
-							mPDGHelper.BurstVersDisque(CheminPDGuser + fileHELPER.ConvertUtf8ToWide(std::string(NomPDGtxt)) + L".txt");
-							ImGui::CloseCurrentPopup();
-						}
-						ImGui::SameLine();
-						if (ImGui::Button(u8"Annuler l'opération"))
-						{
-							ImGui::CloseCurrentPopup();
-						}
-
-						ImGui::EndPopup();
-					}
 					ImGui::Separator();
 					/*
 					* DEBUT DESSIN DYNAMIQUE PDG
 					*/
-					if (ImGui::BeginTable("##tablePdgDynamique", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 110.0f)))
+					if (ImGui::BeginTable("##tablePdgDynamique", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY, ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 110.0f - 26.0f)))
 					{
-						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 20.0f, 0);
-						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 350.0f, 1);
-						ImGui::TableSetupColumn("##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 20.0f, 2);
-						ImGui::TableSetupColumn("##tablePdgDynamiqueLibéllé", ImGuiTableColumnFlags_WidthStretch, 3);
+						ImGui::TableSetupColumn(u8"Obl.##tablePdgDynamiqueObligatoire", ImGuiTableColumnFlags_WidthFixed, 25.0f, 0);
+						ImGui::TableSetupColumn(u8"Question##tablePdgDynamiqueQuestion", ImGuiTableColumnFlags_WidthFixed, 350.0f, 1);
+						ImGui::TableSetupColumn(u8"Aide##tablePdgDynamiqueAide", ImGuiTableColumnFlags_WidthFixed, 25.0f, 2);
+						ImGui::TableSetupColumn(u8" Champ à renseigner##tablePdgDynamiqueLibéllé", ImGuiTableColumnFlags_WidthStretch, 3);
+						ImGui::TableHeadersRow();
+
 						for (size_t lPDG = 0; lPDG < mPDGHelper.ListeQuestion.size(); lPDG++)
 						{
 							ImGui::TableNextRow();
@@ -1726,19 +1451,119 @@ int WINAPI wWinMain(
 							ImGui::TableSetColumnIndex(3);
 							if (mPDGHelper.ListeQuestion[lPDG].EstCheckbox)
 							{
+								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 								ImGui::Checkbox(string("##CheckBox" + pdgClassSEED + to_string(lPDG)).c_str(), &mPDGHelper.ListeQuestion[lPDG].CheckboxValue);
+								ImGui::PopStyleVar();
 							}
 							if (mPDGHelper.ListeQuestion[lPDG].EstLigneTexte)
 							{
+								ImGuiInputTextFlags cFlag = ImGuiInputTextFlags_None;
+								if (mPDGHelper.ListeQuestion[lPDG].EstMajuscule)
+									cFlag = cFlag | ImGuiInputTextFlags_CharsUppercase;
+								if (mPDGHelper.ListeQuestion[lPDG].EstChiffre)
+									cFlag = cFlag | ImGuiInputTextFlags_CharsDecimal;
 								ImGui::SetNextItemWidth(-1.0f);
 								ImGui::InputText(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
-									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), ImGuiInputTextFlags_None);
+									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), cFlag);
 							}
 							if (mPDGHelper.ListeQuestion[lPDG].EstMultiLigneTexte)
 							{
+								ImGuiInputTextFlags cFlag = ImGuiInputTextFlags_None;
+								if (mPDGHelper.ListeQuestion[lPDG].EstMajuscule)
+									cFlag = cFlag | ImGuiInputTextFlags_CharsUppercase;
+								if (mPDGHelper.ListeQuestion[lPDG].EstChiffre)
+									cFlag = cFlag | ImGuiInputTextFlags_CharsDecimal;
 								ImGui::InputTextMultiline(string("##TexteMultiLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
-									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), ImVec2(-1.0f, 40.0f), ImGuiInputTextFlags_None);
+									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), ImVec2(-1.0f, 40.0f), cFlag);
 							}
+						}
+						ImGui::EndTable();
+					}
+					if (ImGui::BeginTable("##TableTABPDGbas", 1, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 34.0f)))
+					{
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+						if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FLOPPY_O, u8" Sauvegarder dans les pages de gardes utilisateurs")))
+						{
+							for (size_t i = 0; i < 128; i++)
+								NomPDGtxt[i] = '\0';
+							std::string Defautstr = u8"Dossier_REE_Numéro_Indice";
+							memcpy_s(NomPDGtxt, Defautstr.size(), &Defautstr[0], Defautstr.size());
+
+							AfficheModalNomPageDeGarde = true;
+							SetEnterTextKeyboardSavePDGtodisk = true;
+						}
+						ImGui::PopStyleVar();
+						ImGui::SameLine();
+						if (FoliotageEnCours)
+						{
+							ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 225.0f);
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_CHECK_SQUARE, u8" Démarrer le foliotage")))
+							{
+								DemarreFoliotageTASK = false;
+								//Sauvegarder sous
+
+								HRESULT hr;
+								CComPtr<IFileSaveDialog> pDlg;
+								COMDLG_FILTERSPEC aFileTypes[] = { { L"Fichier PDF", L"*.pdf" } };
+								hr = pDlg.CoCreateInstance(__uuidof(FileSaveDialog));
+								if (FAILED(hr))
+									break;
+								pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
+								pDlg->SetTitle(L"Enregistrer la procédure foliotée avec page de garde");
+								pDlg->SetOkButtonLabel(L"&Sauvegarder");
+								wstring CustomCheminPDF = wCheminPDForiginal;
+								CustomCheminPDF = CustomCheminPDF.substr(0, CustomCheminPDF.length() - 4);
+								CustomCheminPDF += L"_foliotée";
+								pDlg->SetFileName(CustomCheminPDF.c_str());
+								pDlg->SetDefaultExtension(L"pdf");
+								hr = pDlg->Show(mHwnd);
+								if (SUCCEEDED(hr))
+								{
+									CComPtr<IShellItem> pItem;
+									hr = pDlg->GetResult(&pItem);
+									if (SUCCEEDED(hr))
+									{
+										LPOLESTR pwsz = NULL;
+										hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
+										if (SUCCEEDED(hr))
+										{
+											DemarreFoliotageTASK = true;
+											FoliotageGenerePDG = true;//Ce sera un foliotage sans page de garde
+											AllerVersFolio = true;
+											FoliotageEnCours = false;
+											FichierPDFsortie = wstring(pwsz);
+											MY_MSG("MSG: Enregistrer sous %s", string(FichierPDFsortie.begin(), FichierPDFsortie.end()));
+											CoTaskMemFree(pwsz);
+										}
+									}
+								}
+								else
+								{
+									DemarreFoliotageTASK = false;
+									FichierPDFsortie = L"";
+								}
+							}
+							ImGui::SameLine();
+							if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_UNDO, u8" Annuler")))
+							{
+								AllerVersFolio = true;
+								FoliotageEnCours = false;
+							}
+							ImGui::PopStyleVar();
+						}
+						else
+						{
+							ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 220.0f);
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Générer cette page de garde en PDF")))
+							{
+								if (mPDGHelper.DocumentOuvertWIDE() != L"")
+									AfficheModalGenerePageDeGarde = true;
+							}
+							ImGui::PopStyleVar();
 						}
 						ImGui::EndTable();
 					}
@@ -1874,16 +1699,21 @@ int WINAPI wWinMain(
 					ImGui::PopFont();
 					ImGui::SameLine(); HelpMarker(u8"Vous allez sélectionner l'emplacement sur la page ou le tampon sera apposé."); ImGui::Text("");
 					ImGui::Text(u8"Emplacement du tampon et marge :"); ImGui::SameLine();
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 					ImGui::RadioButton(u8"En haut à gauche", &radioEmplacementTampon, 0); ImGui::SameLine();
 					ImGui::RadioButton(u8"En haut à droite", &radioEmplacementTampon, 1); ImGui::SameLine();
 					ImGui::RadioButton(u8"En bas à gauche", &radioEmplacementTampon, 2); ImGui::SameLine();
 					ImGui::RadioButton(u8"En bas à droite", &radioEmplacementTampon, 3);
+					ImGui::PopStyleVar();
 					ImGui::Text(u8"Marge du tampon :"); ImGui::SameLine(); ImGui::Text(u8"Largeur en point : "); ImGui::SameLine();
 					ImGui::SetNextItemWidth(110.0f);
 					ImGui::InputScalar("##ScalarMargeX", ImGuiDataType_U16, &margeEmplacementTamponX, &u16_one, &u16_fast, "%u");
 					ImGui::SameLine(); ImGui::Text(u8"Hauteur en point : "); ImGui::SameLine();
 					ImGui::SetNextItemWidth(110.0f);
 					ImGui::InputScalar("##ScalarMargeY", ImGuiDataType_U16, &margeEmplacementTamponY, &u16_one, &u16_fast, "%u");
+					ImGui::Text(u8"Ouvrir les documents PDF après génération : "); ImGui::SameLine();
+					ImGui::SetNextItemWidth(110.0f);
+					ImGui::Checkbox("##cbOpenPDF", &bOpenPDF);
 					ImGui::EndTable();
 				}
 			}
@@ -2014,14 +1844,13 @@ Programme sous licence GPL 3
 			}
 
 			//Fonction déclenché par BOOL
-
 			if (DemarreFoliotageTASK)
 			{
 				DemarreFoliotageTASK = false;
 				AfficheFenetreSpinnerthreadFolioSansPDG = true;
 				MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
 				MessagePercentOPENCours = fmt::format("");
-				ImGui::OpenPopup("Avancement##threadFolioSansPDG");
+				AfficheModalAvancementFoliotageSansPdg = true;
 
 				std::thread t([]()
 					{
@@ -2054,6 +1883,9 @@ Programme sous licence GPL 3
 						constexpr double TamponPolice = 8;
 
 						PDFError exPDFError;
+						std::vector<std::wstring> mLogErreur;
+						mLogErreur.clear();
+						mLogErreur.push_back(L"Les documents suivants n'ont pu être créés :");
 
 						MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
 						MessagePercentOPENCours = fmt::format("");
@@ -2074,302 +1906,311 @@ Programme sous licence GPL 3
 										mStarting = u16_PageDebut - 1;
 										mEnding = u16_PageFin;
 									}
-
-									PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
-									PoDoFo::PdfFont* pFont = document.CreateFontSubset("Roboto", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
-									pFont->SetFontSize(TamponPolice);
-									for (size_t i = mStarting; i < mEnding; i++)
+									bool PeutEtreCree = fileHELPER.JeSuisEcrivable(TR_FichierPDFSortie);
+									if (PeutEtreCree)
 									{
-										MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
-										MessagePercentOPENCours = fmt::format("Tr.{}", t);
-										PoDoFo::PdfPage* pPage = document.GetPage(i);
+										PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
+										PoDoFo::PdfFont* pFont = document.CreateFontSubset("Roboto", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
+										pFont->SetFontSize(TamponPolice);
+										for (size_t i = mStarting; i < mEnding; i++)
 										{
-											if (FolioProcedureAAnnuler[i])
+											MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
+											MessagePercentOPENCours = fmt::format("Tr.{}", t);
+											PoDoFo::PdfPage* pPage = document.GetPage(i);
 											{
-												const double DualSpace = 120.0;
-												const double SingleSpace = 60.0;
+												if (FolioProcedureAAnnuler[i])
+												{
+													const double DualSpace = 120.0;
+													const double SingleSpace = 60.0;
 
+													PoDoFo::PdfPainter painter;
+													PoDoFo::PdfRect rect(0, 0, vecMediaBox[i].GetWidth() - DualSpace, vecMediaBox[i].GetHeight() - DualSpace);
+
+													PoDoFo::PdfXObject xObj(rect, &document);
+													painter.SetPage(&xObj);
+													painter.SetStrokeWidth(2.0);
+													painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.SetFont(pFont);
+													pFont->SetFontSize(70.0);
+													PoDoFo::PdfString TexteFolioAnnulee = PoDoFo::PdfString("Sans Objet");
+													if (vecRotation[i] == 0)
+													{
+														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+														painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+														painter.Stroke();
+														painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+														painter.Stroke();
+														painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+															TexteFolioAnnulee,
+															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+													}
+													else if (vecRotation[i] == 90)
+													{
+														painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)vecMediaBox[i].GetHeight() - DualSpace, 0.0);
+														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+														painter.DrawLine(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+															0.0, vecMediaBox[i].GetHeight() - DualSpace);
+														painter.Stroke();
+														painter.DrawLine(vecMediaBox[i].GetHeight() - DualSpace, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+															0.0, vecMediaBox[i].GetHeight() - DualSpace);
+														painter.Stroke();
+														painter.DrawMultiLineText(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()), rect.GetHeight(), rect.GetWidth(),
+															TexteFolioAnnulee,
+															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+													}
+													else if (vecRotation[i] == 180)
+													{
+														painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)vecMediaBox[i].GetWidth() - DualSpace, (double)vecMediaBox[i].GetHeight() - DualSpace);
+														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+														painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+														painter.Stroke();
+														painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+														painter.Stroke();
+														painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+															TexteFolioAnnulee,
+															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+													}
+													else if (vecRotation[i] == 270)
+													{
+														painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)vecMediaBox[i].GetWidth() - DualSpace);
+														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+														painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+															0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace);
+														painter.Stroke();
+														painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace,
+															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+														painter.Stroke();
+														painter.DrawMultiLineText(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+															vecMediaBox[i].GetHeight() - DualSpace, vecMediaBox[i].GetWidth() - DualSpace,
+															TexteFolioAnnulee,
+															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+													}
+													rect.SetLeft(SingleSpace);
+													rect.SetBottom(SingleSpace);
+													PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
+													pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
+													pAnnotation->SetTitle(PoDoFo::PdfString(string("Annuler_p" + to_string(i + 1))));
+													pAnnotation->SetAppearanceStream(&xObj);
+													painter.FinishPage();
+													pFont->SetFontSize(TamponPolice);
+												}
+											}
+											{
 												PoDoFo::PdfPainter painter;
-												PoDoFo::PdfRect rect(0, 0, vecMediaBox[i].GetWidth() - DualSpace, vecMediaBox[i].GetHeight() - DualSpace);
+												PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
+
+												if (vecRotation[i] == 90)
+													rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+												else if (vecRotation[i] == 270)
+													rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
 
 												PoDoFo::PdfXObject xObj(rect, &document);
 												painter.SetPage(&xObj);
-												painter.SetStrokeWidth(2.0);
-												painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-												painter.SetFont(pFont);
-												pFont->SetFontSize(70.0);
-												PoDoFo::PdfString TexteFolioAnnulee = PoDoFo::PdfString("Sans Objet");
-												if (vecRotation[i] == 0)
-												{
-													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
-													painter.Stroke();
-													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
-														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-													painter.Stroke();
-													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
-														TexteFolioAnnulee,
-														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-												}
-												else if (vecRotation[i] == 90)
-												{
-													painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)vecMediaBox[i].GetHeight() - DualSpace, 0.0);
-													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-													painter.DrawLine(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
-														0.0, vecMediaBox[i].GetHeight() - DualSpace);
-													painter.Stroke();
-													painter.DrawLine(vecMediaBox[i].GetHeight() - DualSpace, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
-														0.0, vecMediaBox[i].GetHeight() - DualSpace);
-													painter.Stroke();
-													painter.DrawMultiLineText(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()), rect.GetHeight(), rect.GetWidth(),
-														TexteFolioAnnulee,
-														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-												}
+												/*
+												* Matrix work
+												* SetTransformationMatrix(a, b, c, d, e, f)
+												* double a, b, c, d, e, f;
+												* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
+												* a = cos (alpha);					  0				  -1				 0
+												* b = sin (alpha);					  1				   0			    -1
+												* c = -sin(alpha);					 -1				   0			     1
+												* d = cos (alpha);					  0				  -1			     0
+												* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
+												* f = coord Y Rotation			      0       ValHauteur        ValLargeur
+												*
+												* e et f = point de rotation
+												* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
+												*/
+												if (vecRotation[i] == 90)
+													painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
 												else if (vecRotation[i] == 180)
-												{
-													painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)vecMediaBox[i].GetWidth() - DualSpace, (double)vecMediaBox[i].GetHeight() - DualSpace);
-													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
-													painter.Stroke();
-													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
-														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-													painter.Stroke();
-													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
-														TexteFolioAnnulee,
-														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-												}
+													painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
 												else if (vecRotation[i] == 270)
-												{
-													painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)vecMediaBox[i].GetWidth() - DualSpace);
-													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
-														0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace);
-													painter.Stroke();
-													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace,
-														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-													painter.Stroke();
-													painter.DrawMultiLineText(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
-														vecMediaBox[i].GetHeight() - DualSpace, vecMediaBox[i].GetWidth() - DualSpace,
-														TexteFolioAnnulee,
-														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+													painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
+
+												painter.SetStrokeWidth(TamponEpaisseur);
+												//Fond du tampon en blanc avec bord de couleur rouge
+												painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
+												painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
+												painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
+												painter.FillAndStroke();
+
+												//Les lignes internes
+												painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
+												painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
+												painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
+#ifndef EPR
+												painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
+#endif
+
+												painter.SetFont(pFont);//Utilise pFont pour écrire...
+
+												painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
+												PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
+												PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
+												PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
+												PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
+												PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
+												PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
+
+												painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#ifndef EPR
+												painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#endif
+												painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+												painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+												painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+												painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
+												painter.FinishPage();
+
+												/*
+												* Affinage du Rect
+												*   0,vecHeight
+												*   X**************X vecWidth,vecHeight
+												*   *              *
+												*   *              *
+												*   *              *
+												*   *              *
+												*   *              *
+												*   *              *
+												*   *              *
+												*   *              *
+												*   X**************X 0,vecwidth
+												*  0,0
+												*/
+
+												if (radioEmplacementTampon == 0)
+												{//Haut Gauche
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+													if (vecRotation[i] == 0)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 90)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+														rect.SetBottom((double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 180)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 270)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+													}
 												}
-												rect.SetLeft(SingleSpace);
-												rect.SetBottom(SingleSpace);
+												else if (radioEmplacementTampon == 1)
+												{//Haut Droite
+													if (vecRotation[i] == 0)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 90)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+													}
+													else if (vecRotation[i] == 180)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 270)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+													}
+												}
+												else if (radioEmplacementTampon == 2)
+												{//Bas Gauche
+													if (vecRotation[i] == 0)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 90)
+													{//A Voir
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+													}
+													else if (vecRotation[i] == 180)
+													{//A Voir
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 270)
+													{//A voir
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+													}
+												}
+												else if (radioEmplacementTampon == 3)
+												{//Bas Droite
+													if (vecRotation[i] == 0)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 90)
+													{
+														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+													}
+													else if (vecRotation[i] == 180)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+													}
+													else if (vecRotation[i] == 270)
+													{
+														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+													}
+												}
+
 												PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
 												pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
-												pAnnotation->SetTitle(PoDoFo::PdfString(string("Annuler_p" + to_string(i + 1))));
+												pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
 												pAnnotation->SetAppearanceStream(&xObj);
+
 												painter.FinishPage();
-												pFont->SetFontSize(TamponPolice);
 											}
 										}
+										MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
+										MessagePercentOPENCours = fmt::format("Tr.{}", t);
+										document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
+										if (FoliotageGenerePDG)
 										{
+											mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[t][0]);
+											mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[t][1]);
+											mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[t][2]);
+											mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
+											mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
+											mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
+											mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
+											PoDoFo::PdfPage* pPage = document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0), 0);
 											PoDoFo::PdfPainter painter;
-											PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
+											painter.SetPage(pPage);
 
-											if (vecRotation[i] == 90)
-												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-											else if (vecRotation[i] == 270)
-												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-
-											PoDoFo::PdfXObject xObj(rect, &document);
-											painter.SetPage(&xObj);
-											/*
-											* Matrix work
-											* SetTransformationMatrix(a, b, c, d, e, f)
-											* double a, b, c, d, e, f;
-											* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
-											* a = cos (alpha);					  0				  -1				 0
-											* b = sin (alpha);					  1				   0			    -1
-											* c = -sin(alpha);					 -1				   0			     1
-											* d = cos (alpha);					  0				  -1			     0
-											* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
-											* f = coord Y Rotation			      0       ValHauteur        ValLargeur
-											*
-											* e et f = point de rotation
-											* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
-											*/
-											if (vecRotation[i] == 90)
-												painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
-											else if (vecRotation[i] == 180)
-												painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
-											else if (vecRotation[i] == 270)
-												painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
-
-											painter.SetStrokeWidth(TamponEpaisseur);
-											//Fond du tampon en blanc avec bord de couleur rouge
-											painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
-											painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
-											painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
-											painter.FillAndStroke();
-
-											//Les lignes internes
-											painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
-											painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
-											painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
-#ifndef EPR
-											painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
-#endif
-
-											painter.SetFont(pFont);//Utilise pFont pour écrire...
-
-											painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
-											PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
-											PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
-											PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
-											PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
-											PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
-											PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
-
-											painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#ifndef EPR
-											painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#endif
-											painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-											painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
-											painter.FinishPage();
-
-											/*
-											* Affinage du Rect
-											*   0,vecHeight
-											*   X**************X vecWidth,vecHeight
-											*   *              *
-											*   *              *
-											*   *              *
-											*   *              *
-											*   *              *
-											*   *              *
-											*   *              *
-											*   *              *
-											*   X**************X 0,vecwidth
-											*  0,0
-											*/
-
-											if (radioEmplacementTampon == 0)
-											{//Haut Gauche
-												rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-												rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-												if (vecRotation[i] == 0)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 90)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom((double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 180)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 270)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-												}
-											}
-											else if (radioEmplacementTampon == 1)
-											{//Haut Droite
-												if (vecRotation[i] == 0)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 90)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-												}
-												else if (vecRotation[i] == 180)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 270)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-												}
-											}
-											else if (radioEmplacementTampon == 2)
-											{//Bas Gauche
-												if (vecRotation[i] == 0)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 90)
-												{//A Voir
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-												}
-												else if (vecRotation[i] == 180)
-												{//A Voir
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 270)
-												{//A voir
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-												}
-											}
-											else if (radioEmplacementTampon == 3)
-											{//Bas Droite
-												if (vecRotation[i] == 0)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 90)
-												{
-													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-												}
-												else if (vecRotation[i] == 180)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-												}
-												else if (vecRotation[i] == 270)
-												{
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-												}
-											}
-
-											PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
-											pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
-											pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
-											pAnnotation->SetAppearanceStream(&xObj);
-
+											int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
 											painter.FinishPage();
 										}
+										document.Write(TR_FichierPDFSortie.c_str());
+										if (bOpenPDF)
+											OuvrePDF(TR_FichierPDFSortie);
 									}
-									MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
-									MessagePercentOPENCours = fmt::format("Tr.{}", t);
-									document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
-									if (FoliotageGenerePDG)
+									else
 									{
-										mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[t][0]);
-										mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[t][1]);
-										mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[t][2]);
-										mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
-										mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
-										mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
-										mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
-										PoDoFo::PdfPage* pPage = document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0), 0);
-										PoDoFo::PdfPainter painter;
-										painter.SetPage(pPage);
-
-										int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
-										painter.FinishPage();
+										mLogErreur.push_back(TR_FichierPDFSortie);
 									}
-									document.Write(TR_FichierPDFSortie.c_str());
 								}
 							}
 							catch (const PoDoFo::PdfError& e)
@@ -2385,6 +2226,9 @@ Programme sous licence GPL 3
 								MY_TRACE("Exception inconnue a la ligne ..");
 							}
 						}
+						LogErreur.clear();
+						for (size_t lErr = 0; lErr < mLogErreur.size(); lErr++)
+							LogErreur.push_back(mLogErreur[lErr]);
 						MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
 						MessagePercentOPENCours = fmt::format("");
 						this_thread::sleep_for(1s);
@@ -2393,43 +2237,30 @@ Programme sous licence GPL 3
 				t.detach();
 			}
 
-			ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
-			if (ImGui::BeginPopupModal("Avancement##threadFolioSansPDG", NULL, ImGuiWindowFlags_NoResize))
-			{
-				ImGui::Text("");
-				ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
-				ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
-				ImGui::SameLine();
-				ImGui::PushFont(MYFont20);
-				ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
-				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
-				ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
-				ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
-				ImGui::PopFont();
-
-				ImGui::TextWrapped(MessageOPENCours.c_str());
-
-				if (AfficheFenetreSpinnerthreadFolioSansPDG == false)
-					ImGui::CloseCurrentPopup();
-				ImGui::EndPopup();
-			}
 
 			/*
 			* Affichage Mode sombre / Clair
 			* + FPS
 			*/
-			//ImGui::PushFont(MYFont10bold);
-			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("(60.0 FPS)").x - ImGui::CalcTextSize("Thème sombre  ").x - /*Bordure*/24.0f - /*Checkbox*/24.0f - /*Espace entre widget*/12.0f);
-			ImGui::SetCursorPosY(6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-			ImGui::Checkbox("##ThemeSombre", &ThemeSombre);
+			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("(60.0 FPS)").x - ImGui::CalcTextSize("Thème sombre  ").x - /*Bordure*/24.0f - /*Checkbox*/24.0f);
+			ImGui::SetCursorPosY(4.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.5f);
+			ImGui::PushFont(MYFont10bold);
+			ImGui::Checkbox("##ThemeSombre", &ThemeSombre);// Height = (FontSize + style.FramePadding.y * 2)
+			ImGui::PopFont();
 			ImGui::PopStyleVar();
 			ImGui::SameLine();
 			ImGui::Text(u8"Thème sombre");
-			ImGui::SameLine();
-			ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
-			//ImGui::PopFont();
 #ifdef DEBUG
+			ImGui::SameLine();
+			ImGui::PushFont(MYFont10bold);
+			ImGui::SetCursorPosY(0.0f);
+			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("OOOOOO").x - 10.0f);
+			ImGui::Text(SlowDown ? "Inactif" : "Actif");
+			ImGui::SetCursorPosX(width - ImGui::CalcTextSize("OOOOOO").x - 10.0f);
+			ImGui::SetCursorPosY(16.0f);
+			ImGui::Text("%.1f Ips", ImGui::GetIO().Framerate);
+			ImGui::PopFont();
 			ImGui::SameLine();
 			ImGui::SetCursorPosX(700.0f);
 			//ImGui::PushFont(MYFont10bold);
@@ -2438,13 +2269,638 @@ Programme sous licence GPL 3
 			if (show_demo_window)
 				ImGui::ShowDemoWindow(&show_demo_window);
 #endif // DEBUG
-			if (ThemeSombre)
-				ImGui::StyleColorsDarkCharcoal();
-			else
-				ImGui::StyleColorsLight();
-			//ImGui::StyleColorBlackWhite();
 			ImGui::End();
 		}
+
+		if (LogErreur.size() > 1)
+			ImGui::OpenPopup(u8"ERREUR##ErreurPDG");
+		ImGui::SetNextWindowSize(ImVec2(500.0f, 600.0f));
+		if (ImGui::BeginPopupModal(u8"ERREUR##ErreurPDG", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::PushFont(MYFont14bold);
+			ImGui::Text(fileHELPER.ConvertWideToUtf8(LogErreur[0]).c_str());
+			ImGui::PopFont();
+			ImGui::Separator();
+			for (size_t i = 1; i < LogErreur.size(); i++)
+				ImGui::TextWrapped(fileHELPER.ConvertWideToUtf8(LogErreur[i]).c_str());
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			if (ImGui::Button(u8"Fermer la fenêtre", ImVec2(-1.0f, 24.0f)))
+			{
+				LogErreur.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::PopStyleVar();
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalAvancementFoliotage)
+		{
+			AfficheModalAvancementFoliotage = false;
+			ImGui::OpenPopup("Avancement##TABfolioteruneprocedure");
+		}
+		ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
+		if (ImGui::BeginPopupModal("Avancement##TABfolioteruneprocedure", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::Text("");
+			ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
+			ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
+			ImGui::SameLine();
+			ImGui::PushFont(MYFont20);
+			ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
+			ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
+			ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
+			ImGui::PopFont();
+
+			ImGui::TextWrapped(MessageOPENCours.c_str());
+
+			if (AfficheFenetreSpinner == false)
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalAvancementFoliotageSansPdg)
+		{
+			AfficheModalAvancementFoliotageSansPdg = false;
+			ImGui::OpenPopup("Avancement##threadFolioSansPDG");
+		}
+		ImGui::SetNextWindowSize(ImVec2(OpEnCoursWidth, OpEnCoursHeight));
+		if (ImGui::BeginPopupModal("Avancement##threadFolioSansPDG", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::Text("");
+			ImGui::SetCursorPosX((OpEnCoursWidth - 2 * 32.0f) / 2.0f);
+			ImGui::LoadingIndicatorCircle("##LICAnalysePDF", 32.0f, IMVEC4_COL16(50, 50, 50, 255), IMVEC4_COL16(50, 50, 50, 140), 8, 10.0f);
+			ImGui::SameLine();
+			ImGui::PushFont(MYFont20);
+			ImVec2 percentSize = ImGui::CalcTextSize(MessagePercentOPENCours.c_str());
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 32.0f - ((2.0f / 3.0f) * percentSize.y));
+			ImGui::SetCursorPosX((OpEnCoursWidth - percentSize.x) / 2.0f);
+			ImGui::TextUnformatted(MessagePercentOPENCours.c_str());
+			ImGui::PopFont();
+
+			ImGui::TextWrapped(MessageOPENCours.c_str());
+
+			if (AfficheFenetreSpinnerthreadFolioSansPDG == false)
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalGenerePageDeGarde)
+		{
+			AfficheModalGenerePageDeGarde = false;
+			ImGui::OpenPopup(u8"Générer pages de gardes en PDF##GenPDF");
+		}
+		ImGui::SetNextWindowSize(ImVec2(500.0f, 250.0f));
+		if (ImGui::BeginPopupModal(u8"Générer pages de gardes en PDF##GenPDF", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::Text(u8"Sélectionnez la/les tranche(s) :");
+			static bool genPDFtranche[9];
+			ImGui::Columns(3, "##colTrancheChoice", false);
+			for (size_t iT = 0; iT < 10; iT++)
+			{
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+				ImGui::Checkbox(std::string("##TrancheGenPDF" + to_string(iT)).c_str(), &genPDFtranche[iT]);
+				ImGui::PopStyleVar();
+
+				ImGui::SameLine();
+				ImGui::Text("Tranche %d", iT);
+				ImGui::NextColumn();
+			}
+			ImGui::Columns(1);
+			ImGui::Text(u8"Nom du site pour la page de garde :");
+			ImGui::SameLine(250.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImGui::SetNextItemWidth(200.0f);
+			ImGui::InputTextWithHint("##NomDuSite", "ex. Flamanville", NomSite_pdg, IM_ARRAYSIZE(NomSite_pdg), 0);
+			ImGui::PopStyleVar();
+			ImGui::Text(u8"Indice utilisé pour la page de garde :");
+			ImGui::SameLine(250.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImGui::SetNextItemWidth(100.0f);
+			ImGui::InputTextWithHint("##IndiceProcedure", "ex. A ou PREL", strINDICEREE_pdg, IM_ARRAYSIZE(strINDICEREE_pdg), 0);
+			ImGui::PopStyleVar();
+
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			if (ImGui::BeginTable("table##GenPDF", 2, ImGuiTableFlags_None))
+			{
+				//Decompte des tranches sélectionnées
+				bool btnGenPDFactif = false;
+				for (size_t iL = 0; iL < 10; iL++)
+					if (genPDFtranche[iL])
+						btnGenPDFactif = true;
+
+				ImGui::TableNextColumn();
+				if (ImGuiAl::Button(u8"Générer la/les page(s) de garde(s)##OKGenPDF", btnGenPDFactif, ImVec2(-1.0f, 22.0f)))
+				{
+					std::wstring NomPdfTranchebase = L"";
+					bool UtilisateurOK = false;
+					/*
+						Choix du nom du document
+					*/
+					HRESULT hr;
+					CComPtr<IFileSaveDialog> pDlg;
+					COMDLG_FILTERSPEC aFileTypes[] = {
+						{ L"Fichier PDF Acrobat", L"*.pdf" }
+					};
+					hr = pDlg.CoCreateInstance(__uuidof(FileSaveDialog));
+					if (FAILED(hr))
+						return -1;
+					pDlg->SetFileTypes(_countof(aFileTypes), aFileTypes);
+					pDlg->SetTitle(L"Générer la/les page(s) de garde(s)");
+					pDlg->SetOkButtonLabel(L"&Générer");
+					std::wstring defautNom(mPDGHelper.DocumentOuvertWIDE());
+					defautNom = defautNom.substr(0, defautNom.find_last_of(L"."));
+					pDlg->SetFileName(defautNom.c_str());
+					pDlg->SetDefaultExtension(L"pdf");
+
+					hr = pDlg->Show(mHwnd);
+					if (SUCCEEDED(hr))
+					{
+						CComPtr<IShellItem> pItem;
+						pDlg->GetResult(&pItem);
+						LPOLESTR pwsz = NULL;
+						pItem->GetDisplayName(SIGDN_FILESYSPATH, &pwsz);
+						NomPdfTranchebase = wstring(pwsz);
+						CoTaskMemFree(pwsz);
+						UtilisateurOK = true;
+					}
+					else
+					{//Pressez sur annuler
+						UtilisateurOK = false;
+					}
+					//Choix validé on foliote, sinon on ne fait rien et on annule
+					if (UtilisateurOK)
+					{
+						LogErreur.clear();
+						LogErreur.push_back(L"Les pages de gardes suivantes n'ont pu être créées :");
+						for (size_t i = 0; i < 10; i++)
+						{
+							if (genPDFtranche[i])
+							{
+								std::wstring CurrentPDGpath = NomPdfTranchebase;
+								CurrentPDGpath = CurrentPDGpath.substr(0, CurrentPDGpath.find_last_of(L"."));
+								CurrentPDGpath += L"_Tr_" + std::to_wstring(i) + L".pdf";
+								bool PeutEtreCree = fileHELPER.JeSuisEcrivable(CurrentPDGpath);
+								if (PeutEtreCree)
+								{
+									PoDoFo::PdfStreamedDocument document(fileHELPER.ConvertWideToANSI(CurrentPDGpath).c_str());
+									mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[i][0]);
+									mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[i][1]);
+									mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[i][2]);
+									mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(i);
+									mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite_pdg));
+									mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
+									mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE_pdg));
+									PoDoFo::PdfPage* pPage = document.CreatePage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0));
+									PoDoFo::PdfPainter painter;
+									painter.SetPage(pPage);
+									int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
+									painter.FinishPage();
+									document.Close();
+									if (bOpenPDF)
+										OuvrePDF(CurrentPDGpath);
+								}
+								else
+								{
+									LogErreur.push_back(CurrentPDGpath);
+								}
+							}
+						}
+
+						ImGui::CloseCurrentPopup();
+					}
+				}
+				ImGui::TableNextColumn();
+				if (ImGui::Button(u8"Annuler l'opération##CancelGenPDF", ImVec2(-1.0f, 22.0f)))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndTable();
+			}
+			ImGui::PopStyleVar();
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalSupprimePageDeGarde)
+		{
+			AfficheModalSupprimePageDeGarde = false;
+			ImGui::OpenPopup(u8"Supprimer la page de garde utilisateur##SuppPDG");
+		}
+		ImGui::SetNextWindowSize(ImVec2(400.0f, 110.0f));
+		if (ImGui::BeginPopupModal(u8"Supprimer la page de garde utilisateur##SuppPDG", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::Text(u8"Supprimer la page de garde utilisateur :");
+			ImGui::PushFont(MYFont14bold);
+			ImGui::Text(ListePDGUser[item_current_vPDGuser].c_str());
+			ImGui::PopFont();
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			if (ImGui::BeginTable("table##OuiNonSuppFolio", 2, ImGuiTableFlags_None))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button(u8"Supprimer##OKDelete", ImVec2(-1.0f, 22.0f)))
+				{
+					try
+					{
+						filesystem::remove(CheminPDGuser + fileHELPER.ConvertUtf8ToWide(ListePDGUser[item_current_vPDGuser]));
+					}
+					catch (const std::exception&)
+					{
+					}
+					//On rafraichit
+					ListePDGModele.clear();
+					pdgClassSEED = sGenerate(12);
+					item_current_vPDG = 0;
+					for (const auto& p : filesystem::directory_iterator(CheminPDG))
+					{
+						string pPathExtension = p.path().extension().string();
+						transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+						string pPathFileName = p.path().filename().string();
+						transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+						if (pPathExtension == ".txt")
+							if (pPathFileName == "page de garde standard.txt")
+								ListePDGModele.insert(ListePDGModele.begin() + 0, p.path().filename().u8string());
+							else
+								ListePDGModele.push_back(p.path().filename().u8string());
+					}
+					ListePDGUser.clear();
+					item_current_vPDGuser = -1;
+					for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
+					{
+						string pPathExtension = p.path().extension().string();
+						transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+						string pPathFileName = p.path().filename().string();
+						transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+						if (pPathExtension == ".txt")
+							ListePDGUser.push_back(p.path().filename().u8string());
+					}
+					if (item_current_vPDGuser == -1 && ListePDGUser.size() > 0)
+						item_current_vPDGuser = 0;
+					mPDGHelper.SetBaseModelePath(CheminPDG);
+					mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
+					TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button(u8"Annuler l'opération##CancelDelete", ImVec2(-1.0f, 22.0f)))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndTable();
+			}
+			ImGui::PopStyleVar();
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalAnnulationDeFolio)
+		{
+			AfficheModalAnnulationDeFolio = false;
+			ImGui::OpenPopup("Annulation de folio##AnnulationFolio");
+		}
+		ImGui::SetNextWindowSize(ImVec2(width - 100.0f, height - 120.0f));
+		if (ImGui::BeginPopupModal("Annulation de folio##AnnulationFolio", NULL, ImGuiWindowFlags_NoResize))
+		{
+			if (isGenereMiniature || isLoadingMiniature)
+			{
+				//progress
+				if (isGenereMiniature)
+				{
+					//GET NBFiles
+					if (tmrGenereMiniature.get_elapsed_ms() > 2000)
+					{
+						tmrGenereMiniature.start();
+						{
+							try
+							{
+								auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOut);
+								GenereMiniaturefileCount = (int)std::count_if(
+									begin(dirIter),
+									end(dirIter),
+									[](auto& entry) { return entry.is_regular_file(); }
+								);								//
+							}
+							catch (const std::exception& e)
+							{
+								MY_TRACE("Exception a la ligne:  %s", e.what());
+							}
+						}
+						{
+							try
+							{
+								auto dirIter = std::filesystem::directory_iterator(CheminPopplerPDFPPMTempOutMini);
+								GenereMiniaturefileCount += (int)std::count_if(
+									begin(dirIter),
+									end(dirIter),
+									[](auto& entry) { return entry.is_regular_file(); }
+								);								//
+							}
+							catch (const std::exception& e)
+							{
+								MY_TRACE("Exception a la ligne:  %s", e.what());
+							}
+						}
+					}
+					ImGui::Text(u8"Génération apercu :");
+					ImGui::SameLine(200.0f);
+					std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", (GenereMiniaturefileCount / 2));
+					float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)(GenereMiniaturefileCount / 2)) / 100.0f;
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
+					ImGui::PopStyleVar();
+				}
+				else
+				{
+					ImGui::Text(u8"Génération apercu :");
+					ImGui::SameLine(200.0f);
+					std::string NBPages = fmt::format(u8"{} apercu(s) générée(s)", vecMediaBox.size());
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+					ImGui::PopStyleVar();
+				}
+				if (isLoadingMiniature && !isGenereMiniature)
+				{
+					ImGui::Text(u8"Miniatures chargées en mémoire : ");
+					ImGui::SameLine();
+					std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", CompteLoading);
+					float PCENT = ((100.0f / (float)vecMediaBox.size()) * (float)CompteLoading) / 100.0f;
+					ImGui::ProgressBar(PCENT, ImVec2(200.0f, 22.0f), NBPages.c_str());
+					bool AllDone = true;
+					int CasseLoading = 0;
+					for (size_t iDtex = 0; iDtex < vecListeTexture.size(); iDtex++)
+					{
+						if (!vecListeTexture[iDtex].my_image_success_loading)
+						{
+							AllDone = false;
+							int my_image_width = 0;
+							int my_image_height = 0;
+							GLuint my_image_texture = 0;
+							vecListeTexture[iDtex].my_image_success_loading = LoadTextureFromFile(vecListeTexture[iDtex].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+							vecListeTexture[iDtex].my_image_width = my_image_width;
+							vecListeTexture[iDtex].my_image_height = my_image_height;
+							vecListeTexture[iDtex].my_image_texture = my_image_texture;
+							CompteLoading++;
+							CasseLoading++;
+							if (CasseLoading > 60)
+								break;
+						}
+					}
+					if (AllDone)
+					{
+						isLoadingMiniature = false;
+						//On precharge la premiere image
+						int my_image_width = 0;
+						int my_image_height = 0;
+						GLuint my_image_texture = 0;
+						mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[0].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+						mApercuTexture.my_image_width = my_image_width;
+						mApercuTexture.my_image_height = my_image_height;
+						mApercuTexture.my_image_texture = my_image_texture;
+						MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
+					}
+				}
+				else if (isLoadingMiniature && isGenereMiniature)
+				{
+					ImGui::Text(u8"Miniatures chargées en mémoire : ");
+					ImGui::SameLine(200.0f);
+					std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", 0);
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::ProgressBar(0.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+					ImGui::PopStyleVar();
+				}
+				else
+				{
+					ImGui::Text(u8"Miniatures chargées en mémoire  : ");
+					ImGui::SameLine(200.0f);
+					std::string NBPages = fmt::format(u8"{} miniature(s) chargées(s)", vecMediaBox.size());
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::ProgressBar(100.0f, ImVec2(200.0f, 22.0f), NBPages.c_str());
+					ImGui::PopStyleVar();
+				}
+			}
+
+			if (!isLoadingMiniature && !isGenereMiniature)
+			{
+				if (ImGui::BeginTable("##tablePreview", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX/*| ImGuiTableFlags_Borders (Rajoute une ligne en trop ??)*/,
+					ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 70.0f)))
+				{
+					ImGui::TableSetupColumn("Liste des miniatures##Actions", ImGuiTableColumnFlags_WidthStretch, 0);
+					ImGui::TableSetupColumn("Apercu miniature##Image", ImGuiTableColumnFlags_WidthFixed, 700.0f, 1);
+					ImGui::TableHeadersRow();
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+
+					if (ImGui::BeginTable("##tableCKBOX", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg,
+						ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 50.0f /*- 100.0f*/)))
+					{
+						ImGui::TableSetupColumn("ckb##__ckb", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+						int  DummyCount = 0;
+						for (size_t colLs = 0; colLs < vecListeTexture.size(); colLs++)
+						{
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+							ImGui::Checkbox(fmt::format(u8"##Page {}", colLs).c_str(), &FolioProcedureAAnnulerBKUP[colLs]);
+							ImGui::SameLine();
+							const bool mSelected = false;
+
+							bool InfoIsItemVisible = ImGui::IsItemVisible();
+							if (InfoIsItemVisible)
+							{
+								if (ImGui::Selectable(fmt::format("##selec{}", colLs).c_str(), mSelected, ImGuiSelectableFlags_None, ImVec2(0.0f, 56.0f)))
+								{
+									if (colLs == MiniatureSelectionnee)
+									{
+										//Deja chargee
+									}
+									else
+									{
+										//On doit chargée
+										MiniatureSelectionnee = colLs;
+										MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+										glDeleteTextures(1, &mApercuTexture.my_image_texture);
+										int my_image_width = 0;
+										int my_image_height = 0;
+										GLuint my_image_texture = 0;
+										mApercuTexture.my_image_success_loading = LoadTextureFromFile(vecListeTextureMaxiPathOnly[MiniatureSelectionnee].Chemin.c_str(), &my_image_texture, &my_image_width, &my_image_height);
+										mApercuTexture.my_image_width = my_image_width;
+										mApercuTexture.my_image_height = my_image_height;
+										mApercuTexture.my_image_texture = my_image_texture;
+										MY_MSG("Chargement Preview avec GluID %d statut %s", mApercuTexture.my_image_texture, mApercuTexture.my_image_success_loading ? "TRUE" : "FALSE");
+									}
+								}
+								ImGui::SameLine();
+								ImGui::Image((void*)(intptr_t)vecListeTexture[colLs].my_image_texture, ImVec2(vecListeTexture[colLs].my_image_width, vecListeTexture[colLs].my_image_height));
+								ImGui::PopStyleVar();
+								ImGui::SameLine();
+#ifdef NDEBUG
+								ImGui::Text(fmt::format(u8"Page {}", colLs + 1).c_str());
+#else
+								ImGui::Text(fmt::format(u8"Page {} (GluID {})", colLs + 1, to_string(vecListeTexture[colLs].my_image_texture)).c_str());
+#endif // NDEBUG
+							}
+							else
+							{
+								ImGui::PopStyleVar();
+								DummyCount++;
+								ImGui::Dummy(ImVec2(-1.0f, 64.0f));
+							}
+						}
+						ImGui::EndTable();
+					}
+					ImGui::TableSetColumnIndex(1);
+					static bool ZoomImage = false;
+					ImGui::PushStyleColor(ImGuiCol_TableRowBg, ImVec4(0.00f, 0.00f, 0.00f, 0.50f));
+					if (ImGui::BeginTable("##tableMaxPV", 1, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg,
+						ImVec2(-1.0f, ImGui::GetContentRegionMax().y - 50.0f /*- 100.0f*/)))
+					{
+						ImGui::TableSetupColumn("MaxPV##__mxPV", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						ImGui::Dummy(ImVec2(2.0f, 10.0f)); ImGui::SameLine();
+						ImGui::Image((void*)(intptr_t)mApercuTexture.my_image_texture,
+							ImVec2(mApercuTexture.my_image_width * (ZoomImage ? 2 : 1), mApercuTexture.my_image_height * (ZoomImage ? 2 : 1)));
+						ImGui::EndTable();
+					}
+					ImGui::PopStyleColor();
+
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					if (ImGui::Button(u8"Tout sélectionner"))
+						for (size_t ze = 0; ze < 9999; ze++)
+							FolioProcedureAAnnulerBKUP[ze] = true;
+					ImGui::SameLine();
+					if (ImGui::Button(u8"Tout désélectionner"))
+						for (size_t ze = 0; ze < 9999; ze++)
+							FolioProcedureAAnnulerBKUP[ze] = false;
+					ImGui::PopStyleVar();
+					ImGui::TableSetColumnIndex(1);
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+					ImGui::Checkbox(u8"Zoom x2##Zoom", &ZoomImage);
+					ImGui::PopStyleVar();
+					ImGui::SameLine();
+#ifdef NDEBUG
+					ImGui::Text(fmt::format(u8"Apercu de la page {}", MiniatureSelectionnee + 1).c_str());
+#else
+					ImGui::Text(fmt::format(u8"Apercu de la page {} (GluID {})", MiniatureSelectionnee + 1, to_string(mApercuTexture.my_image_texture)).c_str());
+#endif // NDEBUG
+
+					ImGui::EndTable();
+				}
+			}
+			if (ImGui::BeginTable("##tableAnnulationFolio", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 30.0f)))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+				if (ImGuiAl::Button(u8"Valider le choix des folio(s) à annuler", (!isGenereMiniature && !isLoadingMiniature), ImVec2(-1.0f, 30.0f)))
+				{
+					for (size_t zz = 0; zz < 9999; zz++)//On transfert cette fenetre dans l'original
+						FolioProcedureAAnnuler[zz] = FolioProcedureAAnnulerBKUP[zz];
+					MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+					glDeleteTextures(1, &mApercuTexture.my_image_texture);
+					for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
+						glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::PopStyleVar();
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+				if (ImGuiAl::Button(u8"Ne pas annuler de folio", true, ImVec2(-1.0f, 30.0f)))
+				{
+					MY_MSG("Suppression Preview avec GluID %d", mApercuTexture.my_image_texture);
+					glDeleteTextures(1, &mApercuTexture.my_image_texture);
+					for (size_t ert = 0; ert < vecListeTexture.size(); ert++)
+						glDeleteTextures(1, &vecListeTexture[ert].my_image_texture);
+
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::PopStyleVar();
+				ImGui::EndTable();
+			}
+			ImGui::EndPopup();
+		}
+
+		if (AfficheModalNomPageDeGarde)
+		{
+			AfficheModalNomPageDeGarde = false;
+			ImGui::OpenPopup(u8"Choix du nom de la page de garde");
+		}
+		ImGui::SetNextWindowSize(ImVec2(400.0f, 110.0f));
+		if (ImGui::BeginPopupModal(u8"Choix du nom de la page de garde", NULL, ImGuiWindowFlags_NoResize))
+		{
+			ImGui::Text(u8"Saisir le nom sous lequel sera enregistré la page de garde utilisateur :");
+			bool isEnterTEXT = false;
+			if (SetEnterTextKeyboardSavePDGtodisk)
+			{
+				SetEnterTextKeyboardSavePDGtodisk = false;
+				ImGui::SetKeyboardFocusHere();
+			}
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputTextWithHint("##txtUnPDGtxtnom", u8"Maximum de 128 caractères", NomPDGtxt, 128, ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				SetEnterTextKeyboardSavePDGtodisk = true;
+				isEnterTEXT = true;
+			}
+			if (ImGui::BeginTable("table##SauvePage", 2, ImGuiTableFlags_None))
+			{
+				ImGui::TableNextColumn();
+				if (ImGui::Button(u8"Sauvegarder la page de garde", ImVec2(-1.0f, 22.0f)) || isEnterTEXT)
+				{
+					mPDGHelper.BurstVersDisque(CheminPDGuser + fileHELPER.ConvertUtf8ToWide(std::string(NomPDGtxt)) + L".txt");
+					//On rafraichit
+					ListePDGModele.clear();
+					pdgClassSEED = sGenerate(12);
+					item_current_vPDG = 0;
+					for (const auto& p : filesystem::directory_iterator(CheminPDG))
+					{
+						string pPathExtension = p.path().extension().string();
+						transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+						string pPathFileName = p.path().filename().string();
+						transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+						if (pPathExtension == ".txt")
+							if (pPathFileName == "page de garde standard.txt")
+								ListePDGModele.insert(ListePDGModele.begin() + 0, p.path().filename().u8string());
+							else
+								ListePDGModele.push_back(p.path().filename().u8string());
+					}
+					ListePDGUser.clear();
+					item_current_vPDGuser = -1;
+					for (const auto& p : filesystem::directory_iterator(CheminPDGuser))
+					{
+						string pPathExtension = p.path().extension().string();
+						transform(pPathExtension.begin(), pPathExtension.end(), pPathExtension.begin(), ::tolower);
+						string pPathFileName = p.path().filename().string();
+						transform(pPathFileName.begin(), pPathFileName.end(), pPathFileName.begin(), ::tolower);
+						if (pPathExtension == ".txt")
+						{
+							ListePDGUser.push_back(p.path().filename().u8string());
+							if (p.path().filename().wstring() == fileHELPER.ConvertUtf8ToWide(std::string(NomPDGtxt)) + L".txt")
+								item_current_vPDGuser = ListePDGUser.size() - 1;
+						}
+					}
+					if (item_current_vPDGuser == -1 && ListePDGUser.size() > 0)
+						item_current_vPDGuser = 0;
+					mPDGHelper.SetBaseModelePath(CheminPDGuser);
+					if (ListePDGUser.size() > 0 && item_current_vPDGuser > -1)
+						if (ListePDGUser.size() >= (item_current_vPDGuser + 1))
+							mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGUser[item_current_vPDGuser]));
+					TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::TableNextColumn();
+				if (ImGui::Button(u8"Annuler l'opération", ImVec2(-1.0f, 22.0f)))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndTable();
+			}
+			ImGui::PopStyleVar();
+			ImGui::EndPopup();
+		}
+
 
 		// Rendering
 		ImGui::Render();
@@ -2513,39 +2969,41 @@ bool SauveParametres(/*bool _ThemeSombre, char* Tranche0, char* Tranche1, char* 
 		//Nombre de couleurs enregistrées
 		FILE_write16(fCONFIG, (uint16_t)ListeCouleur.size() - 4);
 		//Toutes les couleurs supplémentaires
-	}
-	for (size_t z = 4; z < ListeCouleur.size(); z++)
-	{
-		static char NomDeLaCouleurSafz[64] = "";
-		memcpy_s(NomDeLaCouleurSafz, 64, &ListeCouleur[z].NomCouleur[0], ListeCouleur[z].NomCouleur.size());
-		if (fCONFIG != NULL)
-			fwrite(NomDeLaCouleurSafz, sizeof(unsigned char), 64, fCONFIG);
-		FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.x * 255));
-		FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.y * 255));
-		FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.z * 255));
-		FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.w * 255));
-	}
-	//Couleurs des tranches
-	for (size_t i = 0; i < 10; i++)
-	{
-		FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][0] * 255));
-		FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][1] * 255));
-		FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][2] * 255));
-		FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][3] * 255));
-	}
-	//Emplacement Tampon
-	FILE_write16(fCONFIG, (uint16_t)radioEmplacementTampon);
+		for (size_t z = 4; z < ListeCouleur.size(); z++)
+		{
+			static char NomDeLaCouleurSafz[64] = "";
+			memcpy_s(NomDeLaCouleurSafz, 64, &ListeCouleur[z].NomCouleur[0], ListeCouleur[z].NomCouleur.size());
+			if (fCONFIG != NULL)
+				fwrite(NomDeLaCouleurSafz, sizeof(unsigned char), 64, fCONFIG);
+			FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.x * 255));
+			FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.y * 255));
+			FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.z * 255));
+			FILE_write16(fCONFIG, (uint16_t)(ListeCouleur[z].CodeCouleur.w * 255));
+		}
+		//Couleurs des tranches
+		for (size_t i = 0; i < 10; i++)
+		{
+			FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][0] * 255));
+			FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][1] * 255));
+			FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][2] * 255));
+			FILE_write16(fCONFIG, (uint16_t)(sListeCouleurTranche[i][3] * 255));
+		}
+		//Emplacement Tampon
+		FILE_write16(fCONFIG, (uint16_t)radioEmplacementTampon);
 
-	//Marge X et Y
-	FILE_write16(fCONFIG, (uint16_t)margeEmplacementTamponX);
-	FILE_write16(fCONFIG, (uint16_t)margeEmplacementTamponY);
-
-	//Nom site
-	if (fCONFIG != NULL)
+		//Marge X et Y
+		FILE_write16(fCONFIG, (uint16_t)margeEmplacementTamponX);
+		FILE_write16(fCONFIG, (uint16_t)margeEmplacementTamponY);
+		//Nom site
 		fwrite(NomSite, sizeof(unsigned char), 32, fCONFIG);
-	if (fCONFIG != NULL)
+		//Nom site PdG
+		fwrite(NomSite_pdg, sizeof(unsigned char), 32, fCONFIG);
+		//Indice PdG
+		fwrite(strINDICEREE_pdg, sizeof(unsigned char), 5, fCONFIG);
+		//Flag ouvrePDF après génération
+		FILE_write16(fCONFIG, (uint16_t)bOpenPDF);
 		fclose(fCONFIG);
-	printf("");
+	}
 	return true;
 }
 
@@ -2564,60 +3022,70 @@ bool ChargeParametres(/*bool& _ThemeSombre, char* Tranche0, char* Tranche1, char
 	FILE* fCONFIG = NULL;
 	if (_wfopen_s(&fCONFIG, CheminConfig.c_str(), L"rb") != 0)
 		return false;
-	//THEME
-	ThemeSombre = (bool)FILE_read16(fCONFIG);
-	//Cycle des tranches
-	fread_s(TrancheCode[0], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[1], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[2], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[3], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[4], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[5], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[6], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[7], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[8], 6, sizeof(unsigned char), 6, fCONFIG);
-	fread_s(TrancheCode[9], 6, sizeof(unsigned char), 6, fCONFIG);
-	//Référence et indice REE
-	fread_s(strREFERENCEREE, 32, sizeof(unsigned char), 32, fCONFIG);
-	fread_s(strINDICEREE, 5, sizeof(unsigned char), 5, fCONFIG);
-	//Nombre de couleurs enregistrées
-	int nbCouleur = FILE_read16(fCONFIG);
-	//Toutes les couleurs supplémentaires
-	for (size_t i = 0; i < nbCouleur; i++)
+
+	if (fCONFIG != NULL)
 	{
-		static char NomDeLaCouleurSafz[64] = "";
-		fread_s(NomDeLaCouleurSafz, 64, sizeof(unsigned char), 64, fCONFIG);
-		int CouleurX = FILE_read16(fCONFIG);
-		int CouleurY = FILE_read16(fCONFIG);
-		int CouleurZ = FILE_read16(fCONFIG);
-		int CouleurW = FILE_read16(fCONFIG);
-		Couleur _Couleur;
-		_Couleur.Locked = false;
-		_Couleur.NomCouleur = string(NomDeLaCouleurSafz);
-		_Couleur.CodeCouleur = IMVEC4_COL16(CouleurX, CouleurY, CouleurZ, CouleurW);
-		ListeCouleur.push_back(_Couleur);
+		//THEME
+		ThemeSombre = (bool)FILE_read16(fCONFIG);
+		//Cycle des tranches
+		fread_s(TrancheCode[0], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[1], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[2], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[3], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[4], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[5], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[6], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[7], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[8], 6, sizeof(unsigned char), 6, fCONFIG);
+		fread_s(TrancheCode[9], 6, sizeof(unsigned char), 6, fCONFIG);
+		//Référence et indice REE
+		fread_s(strREFERENCEREE, 32, sizeof(unsigned char), 32, fCONFIG);
+		fread_s(strINDICEREE, 5, sizeof(unsigned char), 5, fCONFIG);
+		//Nombre de couleurs enregistrées
+		int nbCouleur = FILE_read16(fCONFIG);
+		//Toutes les couleurs supplémentaires
+		for (size_t i = 0; i < nbCouleur; i++)
+		{
+			static char NomDeLaCouleurSafz[64] = "";
+			fread_s(NomDeLaCouleurSafz, 64, sizeof(unsigned char), 64, fCONFIG);
+			int CouleurX = FILE_read16(fCONFIG);
+			int CouleurY = FILE_read16(fCONFIG);
+			int CouleurZ = FILE_read16(fCONFIG);
+			int CouleurW = FILE_read16(fCONFIG);
+			Couleur _Couleur;
+			_Couleur.Locked = false;
+			_Couleur.NomCouleur = string(NomDeLaCouleurSafz);
+			_Couleur.CodeCouleur = IMVEC4_COL16(CouleurX, CouleurY, CouleurZ, CouleurW);
+			ListeCouleur.push_back(_Couleur);
+		}
+		//Couleurs des tranches
+		for (size_t i = 0; i < 10; i++)
+		{
+			sListeCouleurTranche[i][0] = (float)(FILE_read16(fCONFIG) / 255.0f);
+			sListeCouleurTranche[i][1] = (float)(FILE_read16(fCONFIG) / 255.0f);
+			sListeCouleurTranche[i][2] = (float)(FILE_read16(fCONFIG) / 255.0f);
+			sListeCouleurTranche[i][3] = (float)(FILE_read16(fCONFIG) / 255.0f);
+		}
+		//Emplacement Tampon
+		radioEmplacementTampon = FILE_read16(fCONFIG);
+
+		//Marge X et Y
+		margeEmplacementTamponX = FILE_read16(fCONFIG);
+		margeEmplacementTamponY = FILE_read16(fCONFIG);
+
+		//Nom site
+		fread_s(NomSite, 32, sizeof(unsigned char), 32, fCONFIG);
+		//Nom site PdG
+		fread_s(NomSite_pdg, 32, sizeof(unsigned char), 32, fCONFIG);
+		//Indice PdG
+		fread_s(strINDICEREE_pdg, 5, sizeof(unsigned char), 5, fCONFIG);
+		//Flag ouvrePDF après génération
+		bOpenPDF = (bool)FILE_read16(fCONFIG);
+
+
+		fclose(fCONFIG);
+
 	}
-	//Couleurs des tranches
-	for (size_t i = 0; i < 10; i++)
-	{
-		sListeCouleurTranche[i][0] = (float)(FILE_read16(fCONFIG) / 255.0f);
-		sListeCouleurTranche[i][1] = (float)(FILE_read16(fCONFIG) / 255.0f);
-		sListeCouleurTranche[i][2] = (float)(FILE_read16(fCONFIG) / 255.0f);
-		sListeCouleurTranche[i][3] = (float)(FILE_read16(fCONFIG) / 255.0f);
-	}
-	//Emplacement Tampon
-	radioEmplacementTampon = FILE_read16(fCONFIG);
-
-	//Marge X et Y
-	margeEmplacementTamponX = FILE_read16(fCONFIG);
-	margeEmplacementTamponY = FILE_read16(fCONFIG);
-
-	//Nom site
-	fread_s(NomSite, 32, sizeof(unsigned char), 32, fCONFIG);
-
-	fclose(fCONFIG);
-	printf("");
-
 	return true;
 }
 
@@ -2671,7 +3139,11 @@ bool GenereMiniatureMIN(int id, int startingPage, int endingPage, std::wstring D
 	MY_MSG("Sortie Thread %d [bloc %d-%d] (Code sortie %d)", id, startingPage, endingPage, exitCDE);
 	return true;
 }
-
+bool OuvrePDF(std::wstring CheminDocPDF)
+{
+	ShellExecuteW(NULL, L"open", CheminDocPDF.c_str(), NULL, NULL, SW_SHOWNORMAL);
+	return true;
+}
 void MyTrace(int line, const char* fileName, const char* msg, ...)
 {
 	FileHelper mFH = FileHelper(string(fileName));
@@ -3045,10 +3517,9 @@ if (SUCCEEDED(hr))
 #pragma endregion
 
 /*
-*   *-*-*-*-*-*
-*   * T O D O *
-*   *-*-*-*-*-*
+*    *-*-*-*-*-*
+*   * 𝕋 𝕆 𝔻 𝕆 *
+*    *-*-*-*-*-*
 */
-// TODO 1 : Tester la présence des pages de gardes et regénéré au besoin les modèles
-// TODO 2 : Choisir le nom de fichier pour le bouton enregistrer la page de agrde saisie
-// TODO 3 : Faire un bouton généré PDF pour la page de garde avec choix des tranches à la sorties
+//TODO si possible, faire un refresh avant clic dropdown
+//TODO Voir pourquoi des fois un espace entre items ..?

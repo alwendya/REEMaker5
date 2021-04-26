@@ -18,7 +18,6 @@
 /// Par défaut les sorties string et wstring sont en Ansi é ==> é
 /// Utilisé les versions terminant par _utf8 pour les avoir en UTF8 é ==> Ã©
 /// </summary>
-
 class FileHelper
 {
 public:
@@ -76,6 +75,7 @@ public:
 
 	bool JeSuisUnDossier();
 	bool JeSuisUnFichier();
+	bool JeSuisEcrivable(std::wstring);
 	~FileHelper();
 
 private:
@@ -410,6 +410,44 @@ bool FileHelper::JeSuisUnDossier()
 bool FileHelper::JeSuisUnFichier()
 {
 	return isFile(mNomFichierLPATH.c_str());
+}
+
+inline bool FileHelper::JeSuisEcrivable(std::wstring Chemin)
+{
+	if (std::filesystem::exists(Chemin))
+	{
+		//Existe
+		//Je peux ecrire dessus ?
+		std::wfstream my_file;
+		my_file.open(Chemin, std::ios::out | std::ios::ate);
+		if (!my_file) {
+			return false;//Je peux pas écrire dessus
+		}
+		my_file.close();
+		return true;//Je peux écrire dessus
+	}
+	else
+	{
+		//Existe pas
+		//Je peux le créer ?
+		std::wfstream my_file;
+		my_file.open(Chemin, std::ios::out | std::ios::ate);
+		if (!my_file) {
+			return false;//Je peux pas le créer
+		}
+		my_file.close();
+		try
+		{
+			std::filesystem::remove(Chemin);
+		}
+		catch (const std::exception&)
+		{
+			//
+		}
+		return true;//Je peux le créer
+	}
+	return true;
+	return true;
 }
 
 bool FileHelper::IsDosDriveLetter(int ch)

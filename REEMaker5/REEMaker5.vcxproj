@@ -173,6 +173,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Header__CryptoZstd.h" />
+    <ClInclude Include="Header__FileHelper.h" />
+    <ClInclude Include="Header__FileWatcher.h" />
     <ClInclude Include="Header__Font.h" />
     <ClInclude Include="Header__Function.h" />
     <ClInclude Include="Header__ImGUI_addon.h" />

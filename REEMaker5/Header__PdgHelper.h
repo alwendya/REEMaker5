@@ -48,6 +48,8 @@ public:
 		bool CheckboxValue = false;
 		bool EstLigneTexte = false;
 		bool EstMultiLigneTexte = false;
+		bool EstMajuscule = false;
+		bool EstChiffre = false;
 	};
 	struct structReplaceArray
 	{
@@ -220,6 +222,8 @@ bool PDGHelper::OpenAndParseConfig_v2(std::wstring CheminConfig)
 		if (vecCommandeList[i].mTypeCommande == TypeCommande::DESSINECHECKBOXQUESTION || vecCommandeList[i].mTypeCommande == TypeCommande::DESSINEMULTICHECKBOXQUESTION || vecCommandeList[i].mTypeCommande == TypeCommande::DESSINETEXTEQUESTION || vecCommandeList[i].mTypeCommande == TypeCommande::DESSINETEXTEMULTILIGNEQUESTION)
 		{
 			Question mQuestion;
+			mQuestion.EstMajuscule = RetourneCleBool(vecCommandeList[i].mVecCommande, "majuscule");
+			mQuestion.EstChiffre = RetourneCleBool(vecCommandeList[i].mVecCommande, "chiffre");
 			mQuestion.Obligatoire = RetourneCleBool(vecCommandeList[i].mVecCommande, "obligatoire");
 			mQuestion.LaQuestion = RetourneCleStr(vecCommandeList[i].mVecCommande, "question");
 			mQuestion.AideQuestion = RetourneCleStr(vecCommandeList[i].mVecCommande, "aidequestion");
@@ -301,11 +305,12 @@ inline bool PDGHelper::BurstVersDisque(std::wstring FichierSortie)
 			break;
 		case TypeCommande::DESSINECHECKBOX:
 			Fichier << "DESSINECHECKBOX\n";
+			break;
 		case TypeCommande::DESSINECHECKBOXQUESTION:
 			Fichier << "DESSINECHECKBOXQUESTION\n";
 			break;
 		case TypeCommande::DESSINEMULTICHECKBOXQUESTION:
-			Fichier << "DESSINECHECKBOXQUESTION\n";
+			Fichier << "DESSINEMULTICHECKBOXQUESTION\n";
 			break;
 		case TypeCommande::PAGESUIVANTE:
 			Fichier << "PAGESUIVANTE\n";
@@ -327,7 +332,8 @@ inline bool PDGHelper::BurstVersDisque(std::wstring FichierSortie)
 				)
 				Fichier << L"--" << wKeys.c_str() << L"=" << wValeur.c_str() << std::endl;
 			//Cles sans valeur ==> FLAG
-			else if (wKeys == L"gras" || wKeys == L"grasitalic" || wKeys == L"italic" || wKeys == L"monospace" || wKeys == L"obligatoire")
+			else if (wKeys == L"gras" || wKeys == L"grasitalic" || wKeys == L"italic" || wKeys == L"monospace"
+				|| wKeys == L"obligatoire" || wKeys == L"majuscule" || wKeys == L"chiffre")
 				Fichier << L"--" << wKeys.c_str() << std::endl;
 			//Cles avec string
 			else if (wKeys == L"texte" || wKeys == L"question" || wKeys == L"aidequestion" || wKeys == L"chemin")
