@@ -106,7 +106,9 @@ static bool AfficheModalAnnulationDeFolio = false;
 static bool AfficheModalNomPageDeGarde = false;
 
 static bool bOpenPDF = false;
-
+static std::vector<char> vecChar;
+static bool done = false;
+static bool SlowDown = false;
 
 static std::string CheminPDForiginal("");
 static std::wstring wCheminPDForiginal(L"");
@@ -181,10 +183,6 @@ int WINAPI wWinMain(
 {
 	NombreCoeur = (int)NombreCPU();
 	MY_MSG("Init : %d cpu", NombreCoeur);
-	/* A 256 bit key :  32char = 256bits*/
-	std::string key(AY_OBFUSCATE("QxXtiJw^&gh79ZkBDC$bLMESpYJ8VX&X"));
-	/* A 128 bit IV :  16char = 128bits*/
-	std::string iv(AY_OBFUSCATE("Vmn8XqE^2jWxDKAv"));
 
 	TCHAR path[4096];
 	DWORD length;
@@ -202,7 +200,6 @@ int WINAPI wWinMain(
 	CheminCompacteRepare = CheminBASE + L"CompRepare\\CompacteRepareCommandLine.exe";
 	CheminPopplerPDFPPM = CheminBASE + L"PdfToPPM\\pdftoppm.exe";
 	CheminTemp = filesystem::temp_directory_path().wstring() + L"REEMAKER.TMP\\SESSION." + wGenerate(3);
-
 	try
 	{
 		filesystem::create_directories(CheminTemp);
@@ -211,7 +208,6 @@ int WINAPI wWinMain(
 	{
 		MY_TRACE("Exception a la ligne:  %s", e.what());
 	}
-
 	ListePDGModele.clear();
 	pdgClassSEED = sGenerate(12);
 	item_current_vPDG = 0;
@@ -240,12 +236,8 @@ int WINAPI wWinMain(
 	if (item_current_vPDGuser == -1 && ListePDGUser.size() > 0)
 		item_current_vPDGuser = 0;
 
-	if (ListePDGModele.size() == 0)
-	{
-		// On part du principe que c'est une installation par les Admin, donc les pages de gardes modèle sont installé et ne peuvent être supprimé par l'utilisateur
-	}
-	else
-	{
+	if (ListePDGModele.size() != 0)
+	{ //On charge la première page de garde
 		mPDGHelper.SetBaseModelePath(CheminPDG);
 		mPDGHelper.OpenAndParseConfig_v2(fileHELPER.ConvertUtf8ToWide(ListePDGModele[0]));
 		TRACE_PDG("Nombre Objet à dessiner : %d\n", mPDGHelper.ItemCount());
@@ -254,9 +246,9 @@ int WINAPI wWinMain(
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
 	{
 		printf("Error: %s\n", SDL_GetError());
+		#pragma error "Impossible d'initialiser la carte graphique"
 		return -1;
 	}
-
 	// Setup window
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -267,7 +259,7 @@ int WINAPI wWinMain(
 #pragma warning( disable : 26812 )
 	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
 #pragma warning( pop )
-	SDL_Window* window = SDL_CreateWindow("REEMaker 5 - A new hope", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+	SDL_Window* window = SDL_CreateWindow("REEMaker - 5.0 Initium Novum", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_MakeCurrent(window, gl_context);
 	SDL_GL_SetSwapInterval(1); // Enable vsync
@@ -276,22 +268,25 @@ int WINAPI wWinMain(
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.IniFilename = NULL;
 	SDL_SetWindowMinimumSize(window, 1124, 720);
-	{	/*	* Get Hwnd	*/
+	{	/*	On récupère le HandleWINdows de la fenêtre*/
 		struct SDL_SysWMinfo wmInfo;
 		SDL_VERSION(&wmInfo.version);
 		SDL_GetWindowWMInfo(window, &wmInfo);
 		mHwnd = wmInfo.info.win.window;
 	}
-	//FONT AWESOME merged with Roboto
+	/*  POLICE  */
+	//Fusion de FONT AWESOME avec la police d'affichage principale
 	ImFont* MYFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORoboto.c_str(), 14.0f);
-	static const ImWchar icons_ranges[] = { 0xf000, 0xf3ff, 0 }; // Will not be copied by AddFont* so keep in scope.
+	static const ImWchar icons_ranges[] = { 0xf000, 0xf3ff, 0 };
 	ImFontConfig config;
 	config.MergeMode = true;
 	io.Fonts->AddFontFromMemoryCompressedTTF(FontAwesome4_compressed_data, FontAwesome4_compressed_size, 14.0f, &config, icons_ranges);// Merge into first font
 	io.Fonts->Build();
+	//Police aditionnelle
 	ImFont* MYFont20 = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORoboto.c_str(), 20.0f);
 	ImFont* MYFont14bold = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORobotoBold.c_str(), 14.0f);
 	ImFont* MYFont10bold = ImGui::GetIO().Fonts->AddFontFromFileTTF(sCheminMONORobotoBold.c_str(), 10.0f);
+	/*  FIN POLICE  */
 	ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
 	ImGui_ImplOpenGL2_Init();
 	ListeCouleur.clear();
@@ -314,17 +309,13 @@ int WINAPI wWinMain(
 		mCouleur.CodeCouleur = { 0.0f,0.0f,0.0f,1.0f };
 		ListeCouleur.push_back(mCouleur);
 	}
-	/*
-	* Charge les paramètres
-	*/
+	/*	Charge les paramètres  */
 	ChargeParametres();
+
+	vecChar.resize(4);
 	/*
 	* Main loop
 	*/
-	std::vector<char> vecChar;
-	vecChar.resize(4);
-	bool done = false;
-	static bool SlowDown = false;
 	while (!done)
 	{
 		SDL_Event event;
@@ -338,45 +329,45 @@ int WINAPI wWinMain(
 				case SDL_WINDOWEVENT_CLOSE:
 					if (event.window.windowID == SDL_GetWindowID(window))
 					{
-						MY_MSG("MSG: Window %d closed", event.window.windowID);
+						MY_MSG(u8"MSG: Fenêtre %d fermée", event.window.windowID);
 						done = true;
 					}
 					break;
 				case SDL_WINDOWEVENT_SHOWN:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d shown", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d affichée", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_HIDDEN:
 				{
 					SlowDown = true;
-					MY_MSG("MSG: Window %d hidden", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d cachée", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_EXPOSED:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d exposed", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d exposée", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_MOVED:
 				{
-					MY_MSG("MSG: Window %d moved to %d,%d",
+					MY_MSG(u8"MSG: Fenêtre %d déplacée en %d,%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
 				}
 				break;
 				case SDL_WINDOWEVENT_RESIZED:
 				{
-					MY_MSG("MSG: Window %d resized to %dx%d",
+					MY_MSG(u8"MSG: Fenêtre %d redimensionnée en %dx%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
 				}
 				break;
 				case SDL_WINDOWEVENT_SIZE_CHANGED:
 				{
-					MY_MSG("MSG: Window %d size changed to %dx%d",
+					MY_MSG(u8"MSG: Fenêtre %d dimension changée en %dx%d",
 						event.window.windowID, event.window.data1,
 						event.window.data2);
 				}
@@ -384,62 +375,62 @@ int WINAPI wWinMain(
 				case SDL_WINDOWEVENT_MINIMIZED:
 				{
 					SlowDown = true;
-					MY_MSG("MSG: Window %d minimized", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d réduite", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_MAXIMIZED:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d maximized", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d maximisée", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_RESTORED:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d restored", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d restaurée", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_ENTER:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Mouse entered window %d",
+					MY_MSG(u8"MSG: La souris entrée dans la fenêtre %d",
 						event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_LEAVE:
 				{
 					SlowDown = true;
-					MY_MSG("MSG: Mouse left window %d", event.window.windowID);
+					MY_MSG(u8"MSG: La souris a quittée la fenêtre %d", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_FOCUS_GAINED:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d gained keyboard focus",
+					MY_MSG(u8"MSG: La fenêtre %d a récupérée le focus clavier",
 						event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_FOCUS_LOST:
 				{
 					SlowDown = true;
-					MY_MSG("MSG: Window %d lost keyboard focus",
+					MY_MSG(u8"MSG: La fenêtre %d a perdue le focus clavier",
 						event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_TAKE_FOCUS:
 				{
 					SlowDown = false;
-					MY_MSG("MSG: Window %d is offered a focus", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d se voit à offrir le focus", event.window.windowID);
 				}
 				break;
 				case SDL_WINDOWEVENT_HIT_TEST:
 				{
-					MY_MSG("MSG: Window %d has a special hit test", event.window.windowID);
+					MY_MSG(u8"MSG: Fenêtre %d à reçu un test d'entrée", event.window.windowID);
 				}
 				break;
 				default:
 				{
-					MY_MSG("MSG: Window %d got unknown event %d",
+					MY_MSG("MSG: Fenêtre %d evènement inconnue %d",
 						event.window.windowID, event.window.event);
 				}
 				break;
@@ -470,7 +461,7 @@ int WINAPI wWinMain(
 			static float HauteurBarreSeconde = 34.0f;
 			SDL_GetWindowSize(window, &width, &height);
 			ImGui::SetNextWindowSize(ImVec2((float)width, (float)height));
-			ImGui::Begin("Fenètre principale", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);// Create a window called "Hello, world!" and append into it.
+			ImGui::Begin(u8"Fenètre principale", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);// Create a window called "Hello, world!" and append into it.
 			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(0.0, 0.0), ImVec2(width, HauteurBarrePrincipale - 1.0f),
 				ImGui::ColorConvertFloat4ToU32(ThemeSombre ? IMVEC4_COL16(255, 255, 255, 30) : IMVEC4_COL16(200, 200, 200, 200)));
 #pragma region BoutonTAB
@@ -605,18 +596,18 @@ int WINAPI wWinMain(
 					ImGui::Text(u8"Chemin de la procédure :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Chemin de la procédure :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
-					ImGui::SameLine(); HelpMarker(u8"Cliquer sur le bouton Rechercher pour sélectionner la procédure PDF à passer REE."); /*ImGui::Text("");*/
+					ImGui::SameLine(); HelpMarker(u8"Cliquer sur le bouton 'Rechercher' pour sélectionner la procédure PDF à passer REE."); /*ImGui::Text("");*/
 
 					static char strCHEMINPROCEDURE[4096] = "";
 					ImGui::SetNextItemWidth(ImGui::GetContentRegionMax().x - 280.0f - 10.0f);
-					ImGui::InputTextWithHint(u8"##TextCheminProcedure", u8"Cliquer sur rechercher pour sélectionner la procédure à folioter", strCHEMINPROCEDURE, IM_ARRAYSIZE(strCHEMINPROCEDURE), ImGuiInputTextFlags_ReadOnly);
+					ImGui::InputTextWithHint(u8"##TextCheminProcedure", u8"Cliquer sur 'Rechercher' pour sélectionner la procédure à folioter", strCHEMINPROCEDURE, IM_ARRAYSIZE(strCHEMINPROCEDURE), ImGuiInputTextFlags_ReadOnly);
 
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 					ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 280.0f);
 					if (ImGui::Button(ICO_TEXT_CSTR(ICON_FA_FOLDER_OPEN, u8" Rechercher##OuvreProcedure"), ImVec2(280.0f, 22.0f)))
 					{
 						AfficheFenetreSpinner = true;
-						MessageOPENCours = fmt::format("Analyse du document PDF.");
+						MessageOPENCours = fmt::format("Analyse du document PDF");
 						MessagePercentOPENCours = "";
 						AfficheModalAvancementFoliotage = true;
 						HRESULT hr;
@@ -657,7 +648,7 @@ int WINAPI wWinMain(
 									/* THREAD APPROPRIATION PDF (PDF Compacte et repare + Vector MediaBox*/
 									std::thread t([]()
 										{
-											MessageOPENCours = fmt::format("Appropriation du document PDF..");
+											MessageOPENCours = fmt::format("Appropriation du document PDF...");
 											MessagePercentOPENCours = "";
 											wCheminPDF = CheminTemp + L"\\pdftemp_" + wGenerate(12) + L".pdf";
 											CheminPDF = fileHELPER.ConvertWideToUtf8(wCheminPDF);
@@ -687,7 +678,7 @@ int WINAPI wWinMain(
 											{
 												MY_TRACE("Exception a la ligne:  %s", e.what());
 											}
-											MessageOPENCours = fmt::format("Analyse du document PDF..");
+											MessageOPENCours = fmt::format("Analyse du document PDF...");
 											MessagePercentOPENCours = "";
 											try
 											{
@@ -700,7 +691,7 @@ int WINAPI wWinMain(
 													PoDoFo::PdfPage* pPage = documentSource.GetPage(i);
 													vecMediaBox.push_back(pPage->GetMediaBox());
 													vecRotation.push_back(pPage->GetRotation());
-													MessageOPENCours = fmt::format(string("Analyse du document PDF " + string(txtSpinner)));
+													MessageOPENCours = fmt::format(string("Analyse du document PDF ..." + string(txtSpinner)));
 													MessagePercentOPENCours = fmt::format("{}%", (int)(((float)i / nbPages) * 100.0f) + 1);
 												}
 												string PdfVErsionToString = "";
@@ -813,7 +804,7 @@ int WINAPI wWinMain(
 					}
 					ImGui::PopStyleVar();
 
-					ImGui::Text(u8"Information sur la procédure sélectionné : ");
+					ImGui::Text(u8"Information sur la procédure sélectionnée : ");
 					ImGui::SameLine();
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(InformationPDF.c_str());
@@ -835,7 +826,7 @@ int WINAPI wWinMain(
 						ImGui::Text(u8"Référence du tampon REE :");
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Référence du tampon REE :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez saisir la référence de la procédure à passer REE.\nIl faut saisir le site, le palier, REE, chantier ou non, système élémentaire, numéro de la procédure"); /*ImGui::Text("");*/
+						ImGui::SameLine(); HelpMarker(u8"Vous devez saisir la référence de la procédure à passer REE.\nIl faut saisir le site, le palier, REE, chantier ou non, système élémentaire, numéro de la procédure"); /*ImGui::Text("");*/
 						/****************/
 						ImGui::Text(u8"Nom du site : ");
 						ImGui::SameLine();
@@ -886,10 +877,9 @@ int WINAPI wWinMain(
 						ImGui::Text(u8"Etendue du foliotage :");
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Etendue du foliotage :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si la procédure est folioté en totalitée ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné."); /*ImGui::Text("");*/
+						ImGui::SameLine(); HelpMarker(u8"Vous devez choisir si la procédure est foliotée totalement ou partiellement.\nVous allez aussi définir le premier numéro apparaissant sur le premier folio tamponné.");
 
 						int cpChoix = radioTotalPartiel;
-
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 						ImGui::RadioButton("Foliotage total", AfficheAnnuleFolioProcedure ? &cpChoix : &radioTotalPartiel, 0); ImGui::SameLine();
 						ImGui::PopStyleVar();
@@ -941,7 +931,7 @@ int WINAPI wWinMain(
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f),
 							ImVec2(ImGui::CalcTextSize(u8"Annuler un ou plusieurs folio(s) :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici vous devez choisir si vous souhaitez que un/des folio(s) soit annulés (trait qui barre la page)."); /*ImGui::Text("");*/
+						ImGui::SameLine(); HelpMarker(u8"Vous devez choisir si vous souhaitez que un/des folio(s) soit annulés (trait qui barre la page).");
 						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 						if (ImGui::Button(u8"Choisir les folio à annuler##BoutonAfficheFenetreAnnulation", ImVec2(300.0f, 22.0f)))
 						{
@@ -1076,7 +1066,7 @@ int WINAPI wWinMain(
 						for (size_t i = 0; i < vecMediaBox.size(); i++)
 							if (FolioProcedureAAnnuler[i] == true)
 								nbCancel++;
-						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_TIMES, fmt::format(u8"  {} folio(s) annulée(s)", nbCancel)));
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_TIMES, fmt::format(u8"  {} folio(s) annulé(s)", nbCancel)));
 						ImGui::SameLine(); ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - BoutonSuivant.x);
 						if (ImGuiAl::Button(ICO_TEXT_CSTR(ICON_FA_FORWARD, u8" Etape suivante##BoutonAfficheAnnuleFolioProcedure"), BoutonAfficheAnnuleFolioProcedure, BoutonSuivant))
 						{
@@ -1094,7 +1084,7 @@ int WINAPI wWinMain(
 						ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(
 							u8"Choix des tranches et réglages des cycles :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez cocher les tranches applicables au REE et saisir le code projet.\nLe code projet est sous la forme XYYZZ avec :\nX = Le type de Cycle\nYY = L'année du cycle\nZZ = L'index du cycle"); ImGui::Text("");
+						ImGui::SameLine(); HelpMarker(u8"Vous allez cocher les tranches applicables au REE et saisir le code projet.\nLe code projet est sous la forme XYYZZ avec :\nX = Le type de Cycle\nYY = L'index du cycle\nZZ = L'année du cycle"); ImGui::Text("");
 						if (ImGui::BeginTable("##tableTranche", 3, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, 250.0f)))
 						{
 							ImGui::TableNextRow();
@@ -1273,7 +1263,7 @@ int WINAPI wWinMain(
 								ImGui::TableNextRow();
 								ImGui::TableSetColumnIndex(0);
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-								if (ImGui::Button(u8"Folioter avec une page de garde", ImVec2(-1.0f, 30.0f)))
+								if (ImGui::Button(u8"Folioter avec une page de garde", ImVec2(-1.0f, 40.0f)))
 								{
 									AllerVersPDG = true;
 									FoliotageEnCours = true;
@@ -1282,7 +1272,7 @@ int WINAPI wWinMain(
 
 								ImGui::TableSetColumnIndex(1);
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-								if (ImGui::Button(u8"Folioter sans page de garde", ImVec2(-1.0f, 30.0f)))
+								if (ImGui::Button(u8"Folioter sans page de garde", ImVec2(-1.0f, 40.0f)))
 								{
 									DemarreFoliotageTASK = false;
 									//Sauvegarder sous
@@ -1343,10 +1333,10 @@ int WINAPI wWinMain(
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
-					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_DATABASE, u8""));
+					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_DATABASE, u8" "));
 					ImGui::SameLine();
 					ImGui::PushFont(MYFont14bold);
-					ImGui::Text(u8" Base de modèle");
+					ImGui::Text(u8"Base de modèle");
 					ImGui::PopFont();
 					ImGui::SameLine();
 					ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -1413,11 +1403,13 @@ int WINAPI wWinMain(
 					ImGui::Separator();
 					ImGui::Button("##vide", ImVec2(0.01f, 0.0f));
 					ImGui::SameLine();
-					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Vous utilisez : ").c_str()));
+					ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_O, std::string(u8" Page de garde en cours d'utilisation  <<").c_str()));
 					ImGui::SameLine();
 					ImGui::PushFont(MYFont14bold);
 					ImGui::Text(mPDGHelper.DocumentOuvertUTF8().c_str());
 					ImGui::PopFont();
+					ImGui::SameLine();
+					ImGui::Text(u8">>");
 					ImGui::Separator();
 					/*
 					* DEBUT DESSIN DYNAMIQUE PDG
@@ -1435,7 +1427,7 @@ int WINAPI wWinMain(
 							ImGui::TableNextRow();
 							ImGui::TableSetColumnIndex(0);
 							if (mPDGHelper.ListeQuestion[lPDG].Obligatoire)
-								ObligatoireMarker(u8"Doit être obligatoirement renseigné."); ImGui::SameLine();
+								ObligatoireMarker(u8"Doit être obligatoirement renseigné"); ImGui::SameLine();
 
 							ImGui::TableSetColumnIndex(1);
 							if (mPDGHelper.ListeQuestion[lPDG].Obligatoire)
@@ -1454,8 +1446,8 @@ int WINAPI wWinMain(
 								ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 								ImGui::Checkbox(string("##CheckBox" + pdgClassSEED + to_string(lPDG)).c_str(), &mPDGHelper.ListeQuestion[lPDG].CheckboxValue);
 								ImGui::PopStyleVar();
-							}
-							if (mPDGHelper.ListeQuestion[lPDG].EstLigneTexte)
+							} 
+							else if (mPDGHelper.ListeQuestion[lPDG].EstLigneTexte)
 							{
 								ImGuiInputTextFlags cFlag = ImGuiInputTextFlags_None;
 								if (mPDGHelper.ListeQuestion[lPDG].EstMajuscule)
@@ -1466,7 +1458,7 @@ int WINAPI wWinMain(
 								ImGui::InputText(string("##TexteUneLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
 									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), cFlag);
 							}
-							if (mPDGHelper.ListeQuestion[lPDG].EstMultiLigneTexte)
+							else if (mPDGHelper.ListeQuestion[lPDG].EstMultiLigneTexte)
 							{
 								ImGuiInputTextFlags cFlag = ImGuiInputTextFlags_None;
 								if (mPDGHelper.ListeQuestion[lPDG].EstMajuscule)
@@ -1475,6 +1467,10 @@ int WINAPI wWinMain(
 									cFlag = cFlag | ImGuiInputTextFlags_CharsDecimal;
 								ImGui::InputTextMultiline(string("##TexteMultiLigne" + pdgClassSEED + to_string(lPDG)).c_str(),
 									&mPDGHelper.ListeQuestion[lPDG].vDefautQuestion[0], mPDGHelper.ListeQuestion[lPDG].vDefautQuestion.size(), ImVec2(-1.0f, 40.0f), cFlag);
+							}
+							else
+							{
+								OutputDebugString(L"");
 							}
 						}
 						ImGui::EndTable();
@@ -1580,7 +1576,7 @@ int WINAPI wWinMain(
 					ImGui::Text(u8"Couleurs prédéfinies :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(u8"Couleurs prédéfinies :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
-					ImGui::SameLine(); HelpMarker(u8"Ici, vous pouvez retrouver la liste des couleurs disponibles pour les tampons / pages de gardes."); ImGui::Text("");
+					ImGui::SameLine(); HelpMarker(u8"Vous pouvez retrouver la liste des couleurs disponibles pour les tampons / pages de gardes."); ImGui::Text("");
 
 					if (ImGui::BeginTable("##TableCouleurGaucheTitre", 1, ImGuiTableFlags_ScrollY, ImVec2(400.0f, 40.0f)))
 					{
@@ -1602,7 +1598,7 @@ int WINAPI wWinMain(
 						ImGui::PushFont(MYFont14bold);
 						ImGui::Text(u8"Ajouter une couleur à la liste des couleurs prédéfinies :");
 						ImGui::PopFont();
-						ImGui::SameLine(); HelpMarker(u8"Ici, vous allez pouvoir ajouter une nouvelle couleur à la liste des couleurs prédéfinies."); ImGui::Text("");
+						ImGui::SameLine(); HelpMarker(u8"Vous allez pouvoir ajouter une nouvelle couleur à la liste des couleurs prédéfinies."); ImGui::Text("");
 
 						ImGui::EndTable();
 					}
@@ -1614,7 +1610,7 @@ int WINAPI wWinMain(
 
 						for (size_t i = 0; i < ListeCouleur.size(); i++)
 						{
-							if (ImGui::Selectable(string(ListeCouleur[i].NomCouleur + "##CB" + to_string(i) + ListeCouleur[i].NomCouleur).c_str(), false/*&ListeCouleurSelectable[i]*/, ImGuiSelectableFlags_None, ImVec2(200.0f, 20.0f)))
+							if (ImGui::Selectable(string(ListeCouleur[i].NomCouleur + "##sCB" + to_string(i) + ListeCouleur[i].NomCouleur).c_str(), false/*&ListeCouleurSelectable[i]*/, ImGuiSelectableFlags_None, ImVec2(200.0f, 20.0f)))
 							{
 								PressedSelectable = i;
 								ImGui::OpenPopup("##my_select_popup");
@@ -1687,33 +1683,45 @@ int WINAPI wWinMain(
 					ImGui::SameLine(); HelpMarker(u8"Vous pouvez faire glisser une couleur de la liste des couleurs prédéfinies dans la tranche souhaitée."); ImGui::Text("");
 					for (size_t k = 0; k < 10; k++)
 					{
-						ImGui::Text("Couleur du tampon tranche %d :", k);
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_PAINT_BRUSH, u8" Couleur du tampon tranche %d :"), k);
 						ImGui::SameLine();
 						ImGui::ColorEdit4(string("##CouleurTranche" + to_string(k)).c_str(), sListeCouleurTranche[k], ImGuiColorEditFlags_NoAlpha);
 					}
 					ImGui::Separator();
 					ImGui::PushFont(MYFont14bold);
-					ImGui::Text(u8"Emplacement du tampon et marge:");
+					ImGui::Text(u8"Autres paramètres :");
 					ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImVec2(ImGui::CalcTextSize(
-						u8"Emplacement du tampon et marge:").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
+						u8" Autres paramètres :").x + 8.0f, ImGui::GetCursorScreenPos().y - 4.0f), ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
 					ImGui::PopFont();
-					ImGui::SameLine(); HelpMarker(u8"Vous allez sélectionner l'emplacement sur la page ou le tampon sera apposé."); ImGui::Text("");
-					ImGui::Text(u8"Emplacement du tampon et marge :"); ImGui::SameLine();
-					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-					ImGui::RadioButton(u8"En haut à gauche", &radioEmplacementTampon, 0); ImGui::SameLine();
-					ImGui::RadioButton(u8"En haut à droite", &radioEmplacementTampon, 1); ImGui::SameLine();
-					ImGui::RadioButton(u8"En bas à gauche", &radioEmplacementTampon, 2); ImGui::SameLine();
-					ImGui::RadioButton(u8"En bas à droite", &radioEmplacementTampon, 3);
-					ImGui::PopStyleVar();
-					ImGui::Text(u8"Marge du tampon :"); ImGui::SameLine(); ImGui::Text(u8"Largeur en point : "); ImGui::SameLine();
-					ImGui::SetNextItemWidth(110.0f);
-					ImGui::InputScalar("##ScalarMargeX", ImGuiDataType_U16, &margeEmplacementTamponX, &u16_one, &u16_fast, "%u");
-					ImGui::SameLine(); ImGui::Text(u8"Hauteur en point : "); ImGui::SameLine();
-					ImGui::SetNextItemWidth(110.0f);
-					ImGui::InputScalar("##ScalarMargeY", ImGuiDataType_U16, &margeEmplacementTamponY, &u16_one, &u16_fast, "%u");
-					ImGui::Text(u8"Ouvrir les documents PDF après génération : "); ImGui::SameLine();
-					ImGui::SetNextItemWidth(110.0f);
-					ImGui::Checkbox("##cbOpenPDF", &bOpenPDF);
+					ImGui::SameLine(); HelpMarker(u8"Choix de l'emplacement sur la page ou le tampon sera apposé, marge, ouverture des documents PDF après leurs générations..."); ImGui::Text("");
+
+					if (ImGui::BeginTable("##TableAutreParamètre", 2, ImGuiTableFlags_SizingStretchSame, ImVec2(-1.0f, -1.0)))
+					{
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_ALIGN_LEFT, u8" Emplacement du tampon :")); /*ImGui::SameLine();*/
+						ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+						ImGui::Dummy(ImVec2(20.0f, 26.0f)); ImGui::SameLine();
+						ImGui::RadioButton(u8"En haut à gauche", &radioEmplacementTampon, 0); ImGui::SameLine();
+						ImGui::RadioButton(u8"En haut à droite", &radioEmplacementTampon, 1); ImGui::SameLine();
+						ImGui::RadioButton(u8"En bas à gauche", &radioEmplacementTampon, 2); ImGui::SameLine();
+						ImGui::RadioButton(u8"En bas à droite", &radioEmplacementTampon, 3);
+						ImGui::PopStyleVar();
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_INDENT, u8" Marge du tampon :")); /*ImGui::SameLine(); */
+						ImGui::Dummy(ImVec2(20.0f, 26.0f)); ImGui::SameLine();
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_ARROWS_H, u8" Largeur en point : ")); ImGui::SameLine();
+						ImGui::SetNextItemWidth(110.0f);
+						ImGui::InputScalar("##ScalarMargeX", ImGuiDataType_U16, &margeEmplacementTamponX, &u16_one, &u16_fast, "%u");
+						ImGui::SameLine(); ImGui::Text(ICO_TEXT_CSTR(ICON_FA_ARROWS_V, u8" Hauteur en point : ")); ImGui::SameLine();
+						ImGui::SetNextItemWidth(110.0f);
+						ImGui::InputScalar("##ScalarMargeY", ImGuiDataType_U16, &margeEmplacementTamponY, &u16_one, &u16_fast, "%u");
+
+						ImGui::TableSetColumnIndex(1);
+						ImGui::Text(ICO_TEXT_CSTR(ICON_FA_FILE_PDF_O, u8" Ouvrir les documents PDF après leurs génération : ")); ImGui::SameLine();
+						ImGui::Checkbox("##cbOpenPDF", &bOpenPDF);
+
+						ImGui::EndTable();
+					}
 					ImGui::EndTable();
 				}
 			}
@@ -1725,7 +1733,8 @@ int WINAPI wWinMain(
 					ImGui::TableSetColumnIndex(0);
 					const std::string markdownText = u8R"(
 ### REEMaker
-Version 5.0, développé en C++ 17 sous Visual Studio 2019
+Version 5.0 (Initium Novum)
+Développé en C++ 17 sous Visual Studio 2019
 Par Grégory WENTZEL [gregory.wentzel@edf.fr](mailto:gregory.wentzel@edf.fr)
 Programme sous licence GPL 3
 
@@ -1811,9 +1820,6 @@ Programme sous licence GPL 3
   * [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
 	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
 
-## Les icones suivants sont utilisés :
-  * [Stamp Icon par DesignContest](http://www.designcontest.com/)
-	[Licence 'CC Attribution 4.0'](https://creativecommons.org/licenses/by/4.0/).
 )";
 					static ImGui::MarkdownConfig mdConfig;
 					mdConfig.linkCallback = [](ImGui::MarkdownLinkCallbackData data_)
@@ -1842,401 +1848,6 @@ Programme sous licence GPL 3
 					ImGui::EndTable();
 				}
 			}
-
-			//Fonction déclenché par BOOL
-			if (DemarreFoliotageTASK)
-			{
-				DemarreFoliotageTASK = false;
-				AfficheFenetreSpinnerthreadFolioSansPDG = true;
-				MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
-				MessagePercentOPENCours = fmt::format("");
-				AfficheModalAvancementFoliotageSansPdg = true;
-
-				std::thread t([]()
-					{
-						///*  CONFIGURATION TAMPON
-						//    /---------------------------------------\ 60
-						//    |                               |margH  |
-						//    | <margL>Site de fla...<margL>  Tr.2    |
-						//    |                               |margH  |
-						//    |---------------------------------------|h2  40
-						//    |                         |     |margH  |
-						//    | PNO REE DEL 003 VEC CHA | Indice A0   |
-						//    |                         |     |margH  |
-						//    |---------------------s1-100------------|h1  20
-						//    |               |               |margH  |
-						//    | Folio 10000   |      0D2320           |
-						//    |               |               |margH  |
-						//    \-----------s2-60-----------------------/
-						//                                                150
-						//*/
-
-						constexpr double TamponLargeur = 150.0;
-						constexpr double TamponHauteur = 60.0;
-						constexpr double TamponMargH = 7.0;
-						constexpr double TamponMargL = 4.0;
-						constexpr double TamponH1 = 20.0;
-						constexpr double TamponH2 = 40.0;
-						constexpr double TamponS1 = 100.0;
-						constexpr double TamponS2 = 60.0;
-						constexpr double TamponEpaisseur = 1.0;
-						constexpr double TamponPolice = 8;
-
-						PDFError exPDFError;
-						std::vector<std::wstring> mLogErreur;
-						mLogErreur.clear();
-						mLogErreur.push_back(L"Les documents suivants n'ont pu être créés :");
-
-						MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
-						MessagePercentOPENCours = fmt::format("");
-
-						for (size_t t = 0; t < 10; t++)
-						{
-							if (TrancheSelect[t] == false)
-								continue;
-
-							try
-							{
-								wstring TR_FichierPDFSortie = FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf";
-								{
-									size_t mStarting = 0;
-									size_t mEnding = vecMediaBox.size();
-									if (radioTotalPartiel == 1)//Partiel
-									{
-										mStarting = u16_PageDebut - 1;
-										mEnding = u16_PageFin;
-									}
-									bool PeutEtreCree = fileHELPER.JeSuisEcrivable(TR_FichierPDFSortie);
-									if (PeutEtreCree)
-									{
-										PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
-										PoDoFo::PdfFont* pFont = document.CreateFontSubset("Roboto", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
-										pFont->SetFontSize(TamponPolice);
-										for (size_t i = mStarting; i < mEnding; i++)
-										{
-											MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
-											MessagePercentOPENCours = fmt::format("Tr.{}", t);
-											PoDoFo::PdfPage* pPage = document.GetPage(i);
-											{
-												if (FolioProcedureAAnnuler[i])
-												{
-													const double DualSpace = 120.0;
-													const double SingleSpace = 60.0;
-
-													PoDoFo::PdfPainter painter;
-													PoDoFo::PdfRect rect(0, 0, vecMediaBox[i].GetWidth() - DualSpace, vecMediaBox[i].GetHeight() - DualSpace);
-
-													PoDoFo::PdfXObject xObj(rect, &document);
-													painter.SetPage(&xObj);
-													painter.SetStrokeWidth(2.0);
-													painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-													painter.SetFont(pFont);
-													pFont->SetFontSize(70.0);
-													PoDoFo::PdfString TexteFolioAnnulee = PoDoFo::PdfString("Sans Objet");
-													if (vecRotation[i] == 0)
-													{
-														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-														painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
-														painter.Stroke();
-														painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
-															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-														painter.Stroke();
-														painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
-															TexteFolioAnnulee,
-															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-													}
-													else if (vecRotation[i] == 90)
-													{
-														painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)vecMediaBox[i].GetHeight() - DualSpace, 0.0);
-														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-														painter.DrawLine(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
-															0.0, vecMediaBox[i].GetHeight() - DualSpace);
-														painter.Stroke();
-														painter.DrawLine(vecMediaBox[i].GetHeight() - DualSpace, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
-															0.0, vecMediaBox[i].GetHeight() - DualSpace);
-														painter.Stroke();
-														painter.DrawMultiLineText(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()), rect.GetHeight(), rect.GetWidth(),
-															TexteFolioAnnulee,
-															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-													}
-													else if (vecRotation[i] == 180)
-													{
-														painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)vecMediaBox[i].GetWidth() - DualSpace, (double)vecMediaBox[i].GetHeight() - DualSpace);
-														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-														painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
-														painter.Stroke();
-														painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
-															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-														painter.Stroke();
-														painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
-															TexteFolioAnnulee,
-															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-													}
-													else if (vecRotation[i] == 270)
-													{
-														painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)vecMediaBox[i].GetWidth() - DualSpace);
-														painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
-														painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
-															0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace);
-														painter.Stroke();
-														painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace,
-															vecMediaBox[i].GetWidth() - DualSpace, 0.0);
-														painter.Stroke();
-														painter.DrawMultiLineText(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
-															vecMediaBox[i].GetHeight() - DualSpace, vecMediaBox[i].GetWidth() - DualSpace,
-															TexteFolioAnnulee,
-															PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
-													}
-													rect.SetLeft(SingleSpace);
-													rect.SetBottom(SingleSpace);
-													PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
-													pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
-													pAnnotation->SetTitle(PoDoFo::PdfString(string("Annuler_p" + to_string(i + 1))));
-													pAnnotation->SetAppearanceStream(&xObj);
-													painter.FinishPage();
-													pFont->SetFontSize(TamponPolice);
-												}
-											}
-											{
-												PoDoFo::PdfPainter painter;
-												PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
-
-												if (vecRotation[i] == 90)
-													rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-												else if (vecRotation[i] == 270)
-													rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
-
-												PoDoFo::PdfXObject xObj(rect, &document);
-												painter.SetPage(&xObj);
-												/*
-												* Matrix work
-												* SetTransformationMatrix(a, b, c, d, e, f)
-												* double a, b, c, d, e, f;
-												* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
-												* a = cos (alpha);					  0				  -1				 0
-												* b = sin (alpha);					  1				   0			    -1
-												* c = -sin(alpha);					 -1				   0			     1
-												* d = cos (alpha);					  0				  -1			     0
-												* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
-												* f = coord Y Rotation			      0       ValHauteur        ValLargeur
-												*
-												* e et f = point de rotation
-												* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
-												*/
-												if (vecRotation[i] == 90)
-													painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
-												else if (vecRotation[i] == 180)
-													painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
-												else if (vecRotation[i] == 270)
-													painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
-
-												painter.SetStrokeWidth(TamponEpaisseur);
-												//Fond du tampon en blanc avec bord de couleur rouge
-												painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
-												painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
-												painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
-												painter.FillAndStroke();
-
-												//Les lignes internes
-												painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
-												painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
-												painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
-#ifndef EPR
-												painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
-#endif
-
-												painter.SetFont(pFont);//Utilise pFont pour écrire...
-
-												painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
-												PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
-												PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
-												PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
-												PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
-												PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
-												PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
-
-												painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#ifndef EPR
-												painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-#endif
-												painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-												painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-												painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
-												painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
-												painter.FinishPage();
-
-												/*
-												* Affinage du Rect
-												*   0,vecHeight
-												*   X**************X vecWidth,vecHeight
-												*   *              *
-												*   *              *
-												*   *              *
-												*   *              *
-												*   *              *
-												*   *              *
-												*   *              *
-												*   *              *
-												*   X**************X 0,vecwidth
-												*  0,0
-												*/
-
-												if (radioEmplacementTampon == 0)
-												{//Haut Gauche
-													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-													if (vecRotation[i] == 0)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 90)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-														rect.SetBottom((double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 180)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 270)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-													}
-												}
-												else if (radioEmplacementTampon == 1)
-												{//Haut Droite
-													if (vecRotation[i] == 0)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 90)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-													}
-													else if (vecRotation[i] == 180)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 270)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-													}
-												}
-												else if (radioEmplacementTampon == 2)
-												{//Bas Gauche
-													if (vecRotation[i] == 0)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 90)
-													{//A Voir
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-													}
-													else if (vecRotation[i] == 180)
-													{//A Voir
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 270)
-													{//A voir
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-													}
-												}
-												else if (radioEmplacementTampon == 3)
-												{//Bas Droite
-													if (vecRotation[i] == 0)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 90)
-													{
-														rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
-													}
-													else if (vecRotation[i] == 180)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
-														rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
-													}
-													else if (vecRotation[i] == 270)
-													{
-														rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
-														rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
-													}
-												}
-
-												PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
-												pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
-												pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
-												pAnnotation->SetAppearanceStream(&xObj);
-
-												painter.FinishPage();
-											}
-										}
-										MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
-										MessagePercentOPENCours = fmt::format("Tr.{}", t);
-										document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
-										if (FoliotageGenerePDG)
-										{
-											mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[t][0]);
-											mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[t][1]);
-											mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[t][2]);
-											mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
-											mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
-											mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
-											mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
-											PoDoFo::PdfPage* pPage = document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0), 0);
-											PoDoFo::PdfPainter painter;
-											painter.SetPage(pPage);
-
-											int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
-											painter.FinishPage();
-										}
-										document.Write(TR_FichierPDFSortie.c_str());
-										if (bOpenPDF)
-											OuvrePDF(TR_FichierPDFSortie);
-									}
-									else
-									{
-										mLogErreur.push_back(TR_FichierPDFSortie);
-									}
-								}
-							}
-							catch (const PoDoFo::PdfError& e)
-							{
-								MY_TRACE("Exception a la ligne %s", e.what());
-							}
-							catch (exception& ex)
-							{
-								MY_TRACE("Exception a la ligne %s", ex.what());
-							}
-							catch (...)
-							{
-								MY_TRACE("Exception inconnue a la ligne ..");
-							}
-						}
-						LogErreur.clear();
-						for (size_t lErr = 0; lErr < mLogErreur.size(); lErr++)
-							LogErreur.push_back(mLogErreur[lErr]);
-						MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
-						MessagePercentOPENCours = fmt::format("");
-						this_thread::sleep_for(1s);
-						AfficheFenetreSpinnerthreadFolioSansPDG = false;
-					});
-				t.detach();
-			}
-
 
 			/*
 			* Affichage Mode sombre / Clair
@@ -2270,6 +1881,401 @@ Programme sous licence GPL 3
 				ImGui::ShowDemoWindow(&show_demo_window);
 #endif // DEBUG
 			ImGui::End();
+		}
+
+
+		//Fonction déclenché par BOOL
+		if (DemarreFoliotageTASK)
+		{
+			DemarreFoliotageTASK = false;
+			AfficheFenetreSpinnerthreadFolioSansPDG = true;
+			MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
+			MessagePercentOPENCours = fmt::format("");
+			AfficheModalAvancementFoliotageSansPdg = true;
+
+			std::thread t([]()
+				{
+					///*  CONFIGURATION TAMPON
+					//    /---------------------------------------\ 60
+					//    |                               |margH  |
+					//    | <margL>Site de fla...<margL>  Tr.2    |
+					//    |                               |margH  |
+					//    |---------------------------------------|h2  40
+					//    |                         |     |margH  |
+					//    | PNO REE DEL 003 VEC CHA | Indice A0   |
+					//    |                         |     |margH  |
+					//    |---------------------s1-100------------|h1  20
+					//    |               |               |margH  |
+					//    | Folio 10000   |      0D2320           |
+					//    |               |               |margH  |
+					//    \-----------s2-60-----------------------/
+					//                                                150
+					//*/
+
+					constexpr double TamponLargeur = 150.0;
+					constexpr double TamponHauteur = 60.0;
+					constexpr double TamponMargH = 7.0;
+					constexpr double TamponMargL = 4.0;
+					constexpr double TamponH1 = 20.0;
+					constexpr double TamponH2 = 40.0;
+					constexpr double TamponS1 = 100.0;
+					constexpr double TamponS2 = 60.0;
+					constexpr double TamponEpaisseur = 1.0;
+					constexpr double TamponPolice = 8;
+
+					PDFError exPDFError;
+					std::vector<std::wstring> mLogErreur;
+					mLogErreur.clear();
+					mLogErreur.push_back(L"Les documents suivants n'ont pu être créés :");
+
+					MessageOPENCours = fmt::format(u8"Création des tampons {}", string(txtSpinner));
+					MessagePercentOPENCours = fmt::format("");
+
+					for (size_t t = 0; t < 10; t++)
+					{
+						if (TrancheSelect[t] == false)
+							continue;
+
+						try
+						{
+							wstring TR_FichierPDFSortie = FichierPDFsortie.substr(0, FichierPDFsortie.size() - 4) + L"_TR" + to_wstring(t) + L".pdf";
+							{
+								size_t mStarting = 0;
+								size_t mEnding = vecMediaBox.size();
+								if (radioTotalPartiel == 1)//Partiel
+								{
+									mStarting = u16_PageDebut - 1;
+									mEnding = u16_PageFin;
+								}
+								bool PeutEtreCree = fileHELPER.JeSuisEcrivable(TR_FichierPDFSortie);
+								if (PeutEtreCree)
+								{
+									PoDoFo::PdfMemDocument document(wCheminPDF.c_str());
+									PoDoFo::PdfFont* pFont = document.CreateFontSubset("Roboto", true, false, false, PoDoFo::PdfEncodingFactory::GlobalWinAnsiEncodingInstance(), fileHELPER.ConvertWideToANSI(CheminFontTampon).c_str());
+									pFont->SetFontSize(TamponPolice);
+									for (size_t i = mStarting; i < mEnding; i++)
+									{
+										MessageOPENCours = fmt::format(u8"Création des tampons {}\n\nPage {} / {}", string(txtSpinner), i + 1, document.GetPageCount());
+										MessagePercentOPENCours = fmt::format("Tr.{}", t);
+										PoDoFo::PdfPage* pPage = document.GetPage(i);
+										{
+											if (FolioProcedureAAnnuler[i])
+											{
+												const double DualSpace = 120.0;
+												const double SingleSpace = 60.0;
+
+												PoDoFo::PdfPainter painter;
+												PoDoFo::PdfRect rect(0, 0, vecMediaBox[i].GetWidth() - DualSpace, vecMediaBox[i].GetHeight() - DualSpace);
+
+												PoDoFo::PdfXObject xObj(rect, &document);
+												painter.SetPage(&xObj);
+												painter.SetStrokeWidth(2.0);
+												painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+												painter.SetFont(pFont);
+												pFont->SetFontSize(70.0);
+												PoDoFo::PdfString TexteFolioAnnulee = PoDoFo::PdfString("Sans Objet");
+												if (vecRotation[i] == 0)
+												{
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 90)
+												{
+													painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)vecMediaBox[i].GetHeight() - DualSpace, 0.0);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+														0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(vecMediaBox[i].GetHeight() - DualSpace, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()),
+														0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, -(vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight()), rect.GetHeight(), rect.GetWidth(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 180)
+												{
+													painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)vecMediaBox[i].GetWidth() - DualSpace, (double)vecMediaBox[i].GetHeight() - DualSpace);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0, 0.0, 0.0, vecMediaBox[i].GetHeight() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0, vecMediaBox[i].GetHeight() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0, 0.0, rect.GetWidth(), rect.GetHeight(),
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												else if (vecRotation[i] == 270)
+												{
+													painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)vecMediaBox[i].GetWidth() - DualSpace);
+													painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);
+													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+														0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace);
+													painter.Stroke();
+													painter.DrawLine(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), vecMediaBox[i].GetWidth() - DualSpace,
+														vecMediaBox[i].GetWidth() - DualSpace, 0.0);
+													painter.Stroke();
+													painter.DrawMultiLineText(0.0 + vecMediaBox[i].GetWidth() - vecMediaBox[i].GetHeight(), 0.0,
+														vecMediaBox[i].GetHeight() - DualSpace, vecMediaBox[i].GetWidth() - DualSpace,
+														TexteFolioAnnulee,
+														PoDoFo::EPdfAlignment::ePdfAlignment_Center, PoDoFo::EPdfVerticalAlignment::ePdfVerticalAlignment_Center);//OK
+												}
+												rect.SetLeft(SingleSpace);
+												rect.SetBottom(SingleSpace);
+												PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
+												pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
+												pAnnotation->SetTitle(PoDoFo::PdfString(string("Annuler_p" + to_string(i + 1))));
+												pAnnotation->SetAppearanceStream(&xObj);
+												painter.FinishPage();
+												pFont->SetFontSize(TamponPolice);
+											}
+										}
+										{
+											PoDoFo::PdfPainter painter;
+											PoDoFo::PdfRect rect(0, 0, TamponLargeur, TamponHauteur);
+
+											if (vecRotation[i] == 90)
+												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+											else if (vecRotation[i] == 270)
+												rect = PoDoFo::PdfRect(0, 0, TamponHauteur, TamponLargeur);
+
+											PoDoFo::PdfXObject xObj(rect, &document);
+											painter.SetPage(&xObj);
+											/*
+											* Matrix work
+											* SetTransformationMatrix(a, b, c, d, e, f)
+											* double a, b, c, d, e, f;
+											* double alpha = AngleRotation;	Pour 90			Pour 180		  Pour 270
+											* a = cos (alpha);					  0				  -1				 0
+											* b = sin (alpha);					  1				   0			    -1
+											* c = -sin(alpha);					 -1				   0			     1
+											* d = cos (alpha);					  0				  -1			     0
+											* e = coord X Rotation 	     ValHauteur       ValLargeur                 0
+											* f = coord Y Rotation			      0       ValHauteur        ValLargeur
+											*
+											* e et f = point de rotation
+											* https://en.wikipedia.org/wiki/Rotation_matrix#Common_rotations
+											*/
+											if (vecRotation[i] == 90)
+												painter.SetTransformationMatrix(0.0, 1.0, -1.0, 0.0, (double)TamponHauteur, 0.0);
+											else if (vecRotation[i] == 180)
+												painter.SetTransformationMatrix(-1.0, 0.0, 0.0, -1.0, (double)TamponLargeur, (double)TamponHauteur);
+											else if (vecRotation[i] == 270)
+												painter.SetTransformationMatrix(0.0, -1.0, 1.0, 0.0, 0.0, (double)TamponLargeur);
+
+											painter.SetStrokeWidth(TamponEpaisseur);
+											//Fond du tampon en blanc avec bord de couleur rouge
+											painter.SetStrokingColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur ligne format RGB avec 0 à 255 = 0.0 à 1.0
+											painter.SetColor(1.0, 1.0, 1.0);//Fond du tampon
+											painter.Rectangle(TamponEpaisseur / 2, TamponEpaisseur / 2, TamponLargeur - TamponEpaisseur, TamponHauteur - TamponEpaisseur);
+											painter.FillAndStroke();
+
+											//Les lignes internes
+											painter.DrawLine(0.0, TamponH1, TamponLargeur, TamponH1);
+											painter.DrawLine(0.0, TamponH2, TamponLargeur, TamponH2);
+											painter.DrawLine(TamponS1, TamponH1, TamponS1, TamponH2);
+#ifndef EPR
+											painter.DrawLine(TamponS2, 0.0, TamponS2, TamponH1);
+#endif
+
+											painter.SetFont(pFont);//Utilise pFont pour écrire...
+
+											painter.SetColor((double)sListeCouleurTranche[t][0], (double)sListeCouleurTranche[t][1], (double)sListeCouleurTranche[t][2]);//Couleur texte format RGB avec 0 à 255 = 0.0 à 1.0
+											PoDoFo::PdfString utf8SiteDe(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Site de " + string(NomSite)).c_str()));
+											PoDoFo::PdfString utf8Tranche(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Tr. " + to_string(t)).c_str()));
+											PoDoFo::PdfString utf8REE(reinterpret_cast<const PoDoFo::pdf_utf8*>(string(strREFERENCEREE).c_str()));
+											PoDoFo::PdfString utf8Indice(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Ind. " + string(strINDICEREE)).c_str()));
+											PoDoFo::PdfString utf8Folio(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Folio " + to_string(u16_PremierNumero + i - (radioTotalPartiel == 1 ? u16_PageDebut - 1 : 0))).c_str()));
+											PoDoFo::PdfString utf8Cycle(reinterpret_cast<const PoDoFo::pdf_utf8*>(string("Cycle " + to_string(t) + string(TrancheCode[t])).c_str()));
+
+											painter.DrawTextAligned(TamponMargL, TamponMargH, TamponS2 - 2 * TamponMargL, utf8Folio, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#ifndef EPR
+											painter.DrawTextAligned(TamponS2 + TamponMargL, TamponMargH, (TamponLargeur - TamponS2) - 2 * TamponMargL, utf8Cycle, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+#endif
+											painter.DrawTextAligned(TamponMargL, TamponH1 + TamponMargH, TamponS1 - 2 * TamponMargL, utf8REE, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponS1 + TamponMargL, TamponH1 + TamponMargH, (TamponLargeur - TamponS1) - 2 * TamponMargL, utf8Indice, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8SiteDe, PoDoFo::EPdfAlignment::ePdfAlignment_Left);//OK
+											painter.DrawTextAligned(TamponMargL, TamponH2 + TamponMargH, TamponLargeur - 2 * TamponMargL, utf8Tranche, PoDoFo::EPdfAlignment::ePdfAlignment_Right);//OK
+											painter.FinishPage();
+
+											/*
+											* Affinage du Rect
+											*   0,vecHeight
+											*   X**************X vecWidth,vecHeight
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   *              *
+											*   X**************X 0,vecwidth
+											*  0,0
+											*/
+
+											if (radioEmplacementTampon == 0)
+											{//Haut Gauche
+												rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+												rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom((double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+											}
+											else if (radioEmplacementTampon == 1)
+											{//Haut Droite
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+											}
+											else if (radioEmplacementTampon == 2)
+											{//Bas Gauche
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{//A Voir
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{//A Voir
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{//A voir
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+											}
+											else if (radioEmplacementTampon == 3)
+											{//Bas Droite
+												if (vecRotation[i] == 0)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponX);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 90)
+												{
+													rect.SetLeft(vecMediaBox[i].GetWidth() - rect.GetWidth() - (double)margeEmplacementTamponY);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponX);
+												}
+												else if (vecRotation[i] == 180)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponX);
+													rect.SetBottom(vecMediaBox[i].GetHeight() - rect.GetHeight() - (double)margeEmplacementTamponY);
+												}
+												else if (vecRotation[i] == 270)
+												{
+													rect.SetLeft(0.0 + (double)margeEmplacementTamponY);
+													rect.SetBottom(0.0 + (double)margeEmplacementTamponX);
+												}
+											}
+
+											PoDoFo::PdfAnnotation* pAnnotation = pPage->CreateAnnotation(PoDoFo::EPdfAnnotation::ePdfAnnotation_Stamp, rect);
+											pAnnotation->SetFlags(PoDoFo::ePdfAnnotationFlags_Print);
+											pAnnotation->SetTitle(PoDoFo::PdfString(string("Tampon_p" + to_string(i + 1))));
+											pAnnotation->SetAppearanceStream(&xObj);
+
+											painter.FinishPage();
+										}
+									}
+									MessageOPENCours = fmt::format(u8"Création des tampons {}\nSauvegarde du fichier PDF...", string(txtSpinner));
+									MessagePercentOPENCours = fmt::format("Tr.{}", t);
+									document.GetInfo()->SetCreator(reinterpret_cast<const PoDoFo::pdf_utf8*>(u8"Procédure traitée par REEMaker"));
+									if (FoliotageGenerePDG)
+									{
+										mPDGHelper.ArrayFromREEMAKER.REErouge = (int)(255.0 * sListeCouleurTranche[t][0]);
+										mPDGHelper.ArrayFromREEMAKER.REEvert = (int)(255.0 * sListeCouleurTranche[t][1]);
+										mPDGHelper.ArrayFromREEMAKER.REEbleu = (int)(255.0 * sListeCouleurTranche[t][2]);
+										mPDGHelper.ArrayFromREEMAKER.ReferenceSite = fileHELPER.utf8_to_ansi(string(NomSite));
+										mPDGHelper.ArrayFromREEMAKER.NumeroTranche = std::to_string(t);
+										mPDGHelper.ArrayFromREEMAKER.ReferenceREE = fileHELPER.utf8_to_ansi(string(strREFERENCEREE));
+										mPDGHelper.ArrayFromREEMAKER.IndiceREE = fileHELPER.utf8_to_ansi(string(strINDICEREE));
+										PoDoFo::PdfPage* pPage = document.InsertPage(PoDoFo::PdfRect(0.0, 0.0, 595.0, 842.0), 0);
+										PoDoFo::PdfPainter painter;
+										painter.SetPage(pPage);
+
+										int NBPageCree = mPDGHelper.DrawOnPage_v2(painter, document);
+										painter.FinishPage();
+									}
+									document.Write(TR_FichierPDFSortie.c_str());
+									if (bOpenPDF)
+										OuvrePDF(TR_FichierPDFSortie);
+								}
+								else
+								{
+									mLogErreur.push_back(TR_FichierPDFSortie);
+								}
+							}
+						}
+						catch (const PoDoFo::PdfError& e)
+						{
+							MY_TRACE("Exception a la ligne %s", e.what());
+						}
+						catch (exception& ex)
+						{
+							MY_TRACE("Exception a la ligne %s", ex.what());
+						}
+						catch (...)
+						{
+							MY_TRACE("Exception inconnue a la ligne ..");
+						}
+					}
+					LogErreur.clear();
+					for (size_t lErr = 0; lErr < mLogErreur.size(); lErr++)
+						LogErreur.push_back(mLogErreur[lErr]);
+					MessageOPENCours = fmt::format(u8"Fin du foliotage pour toutes les tranches sélectionnées.");
+					MessagePercentOPENCours = fmt::format("");
+					this_thread::sleep_for(1s);
+					AfficheFenetreSpinnerthreadFolioSansPDG = false;
+				});
+			t.detach();
 		}
 
 		if (LogErreur.size() > 1)
@@ -3088,7 +3094,6 @@ bool ChargeParametres(/*bool& _ThemeSombre, char* Tranche0, char* Tranche1, char
 	}
 	return true;
 }
-
 bool GenereMiniature(int id, int startingPage, int endingPage, std::wstring DocumentPDF) {
 	MY_MSG("Lancement Thread %d [bloc %d-%d]", id, startingPage, endingPage);
 	FileHelper mPopplerFH(CheminPopplerPDFPPM);
@@ -3521,5 +3526,3 @@ if (SUCCEEDED(hr))
 *   * 𝕋 𝕆 𝔻 𝕆 *
 *    *-*-*-*-*-*
 */
-//TODO si possible, faire un refresh avant clic dropdown
-//TODO Voir pourquoi des fois un espace entre items ..?
