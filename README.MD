@@ -100,16 +100,12 @@ Utilise les librairies/codes/assets/programmes suivants :
         
   * Compacte et répare Command Line
     Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
-    
     Utilise [iText7](https://itextpdf.com/en/products/itext-7/) sous [Licence AGpl](https://github.com/itext/itext7/blob/develop/LICENSE.md)
     
 * [Poppler PDFToPPM](https://poppler.freedesktop.org)
   Transformation de PDF en image.
 
   [Licence 'GPL3'](https://gitlab.freedesktop.org/poppler/poppler#history-and-gpl-licensing)
-
-* Compacte et répare Command Line
-  Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
 
 * Utilise les polices [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
 	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
