@@ -97,10 +97,7 @@ Utilise les librairies/codes/assets/programmes suivants :
   * [PLF Nanotimer](https://github.com/mattreecebentley/plf_nanotimer/)
     Timer mesurant les nanosecondes.
     [Licence 'Zlib Licence'](https://en.wikipedia.org/wiki/Zlib_License/).
-    
-  * [Droid Sans par Steve Matteson](https://en.wikipedia.org/wiki/Steve_Matteson)
-    [Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
-    
+        
   * Compacte et répare Command Line
     Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
     
@@ -114,5 +111,5 @@ Utilise les librairies/codes/assets/programmes suivants :
 * Compacte et répare Command Line
   Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
 
-  * Utilise les poslices [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
+* Utilise les polices [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
 	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
