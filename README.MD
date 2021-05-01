@@ -22,7 +22,7 @@ Utilise les librairies/codes/assets/programmes suivants :
     Librairie pour gestion de notification Windows.
     [Licence MIT](https://raw.githubusercontent.com/mohabouje/WinToast/master/LICENSE.txt).
     
-  * [PoDoFo Version 0.96](http://podofo.sourceforge.net)
+  * [PoDoFo Version 0.97](http://podofo.sourceforge.net)
     Librairie de lecture /écriture de fichier PDF.
     [Licence LGPL](http://www.gnu.org/copyleft/lesser.html).
     
@@ -101,13 +101,18 @@ Utilise les librairies/codes/assets/programmes suivants :
   * [Droid Sans par Steve Matteson](https://en.wikipedia.org/wiki/Steve_Matteson)
     [Licence 'Apache License'](https://en.wikipedia.org/wiki/Apache_License).
     
-  * [Stamp Icon par DesignContest](http://www.designcontest.com/)
-    [Licence 'CC Attribution 4.0'](https://creativecommons.org/licenses/by/4.0/).
-    
   * Compacte et répare Command Line
     Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
     
     Utilise [iText7](https://itextpdf.com/en/products/itext-7/) sous [Licence AGpl](https://github.com/itext/itext7/blob/develop/LICENSE.md)
+    
+* [Poppler PDFToPPM](https://poppler.freedesktop.org)
+  Transformation de PDF en image.
 
-Lire le fichier INSTALL.MD pour les indications sur la compilation des librairies utilisées.
+  [Licence 'GPL3'](https://gitlab.freedesktop.org/poppler/poppler#history-and-gpl-licensing)
 
+* Compacte et répare Command Line
+  Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
+
+  * Utilise les poslices [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
+	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
