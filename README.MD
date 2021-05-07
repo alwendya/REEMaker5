@@ -1,5 +1,7 @@
 ### REEMAKER 5
 
+​			***Initium Novum***
+
 Outil de foliotage de document en C++.
 
 ------
@@ -8,7 +10,7 @@ Logiciel pour utilisation CNPE EDF sous licence **GPL3**.
 
 
 
-Utilise les librairies/codes/assets/programmes suivants :
+Utilise les librairies et codes suivants :
 
   * [Simple Directmedia Layer : SDL 2](https://www.libsdl.org/index.php)
     Librairie de rendu graphique OpenGL 2/3.
@@ -82,10 +84,6 @@ Utilise les librairies/codes/assets/programmes suivants :
     Gestion de fichier Tiff.
     Licence domaine public.
     
-  * [PDFToolkit Server](https://www.pdflabs.com/tools/pdftk-server)
-    Manipulation de fichier PDF.
-    [Licence 'GPL v2'](https://www.pdflabs.com/docs/pdftk-license/gnu_general_public_license_2.txt).
-    
   * [imgui_markdown](https://github.com/juliettef/imgui_markdown/)
     Librairie d'affichage de texte au format Markdown.
     [Licence 'zlib License'](https://raw.githubusercontent.com/juliettef/imgui_markdown/master/License.txt/).
@@ -97,7 +95,9 @@ Utilise les librairies/codes/assets/programmes suivants :
   * [PLF Nanotimer](https://github.com/mattreecebentley/plf_nanotimer/)
     Timer mesurant les nanosecondes.
     [Licence 'Zlib Licence'](https://en.wikipedia.org/wiki/Zlib_License/).
-        
+    
+    Utilise les logiciels suivants :
+    
   * Compacte et répare Command Line
     Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
     
@@ -111,5 +111,15 @@ Utilise les librairies/codes/assets/programmes suivants :
 * Compacte et répare Command Line
   Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
 
-* Utilise les polices [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
+  * PDGEditeur (Outil maison)
+	Editeur / créateur de fichier de page de garde.
+	[Licence 'MIT'](https://raw.githubusercontent.com/fmtlib/fmt/master/LICENSE.rst).
+	
+	Utilise les polices suivantes :
+	
+* [Roboto et Roboto Mono par Steve Matteson](https://github.com/google/fonts/tree/main/apache)
 	[Licence 'Apache License'](https://github.com/google/fonts/blob/main/apache/roboto/LICENSE.txt).
+
+  * [Font AWESOME 5](https://fontawesome.com/)
+	[Licence 'Font Awesome Free License'](https://raw.githubusercontent.com/FortAwesome/Font-Awesome/master/LICENSE.txt).
+

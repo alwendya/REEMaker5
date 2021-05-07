@@ -60,6 +60,9 @@ public:
 		int REErouge = 0;
 		int REEvert = 0;
 		int REEbleu = 0;
+		int REErougeAccent = 0;
+		int REEvertAccent = 0;
+		int REEbleuAccent = 0;
 	};
 	PDGHelper();
 	bool OpenAndParseConfig_v2(std::wstring CheminConfig);
@@ -434,31 +437,43 @@ inline int PDGHelper::DrawOnPage_v2(PoDoFo::PdfPainter& Painter, PoDoFo::PdfDocu
 		int ValRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "rouge");
 		if (ValRouge == -1)
 			ValRouge = ArrayFromREEMAKER.REErouge;
+		if (ValRouge == -2)
+			ValRouge = ArrayFromREEMAKER.REErougeAccent;
 		if (ValRouge == INT16_MAX)
 			ValRouge = 0;
 		int valVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "vert");
 		if (valVert == -1)
 			valVert = ArrayFromREEMAKER.REEvert;
+		if (valVert== -2)
+			valVert = ArrayFromREEMAKER.REEvertAccent;
 		if (valVert == INT16_MAX)
 			valVert = 0;
 		int valBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "bleu");
 		if (valBleu == -1)
 			valBleu = ArrayFromREEMAKER.REEbleu;
+		if (valBleu == -2)
+			valBleu = ArrayFromREEMAKER.REEbleuAccent;
 		if (valBleu == INT16_MAX)
 			valBleu = 0;
 		int ValRemplisRouge = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisrouge");
 		if (ValRemplisRouge == -1)
 			ValRemplisRouge = ArrayFromREEMAKER.REErouge;
+		if (ValRemplisRouge == -2)
+			ValRemplisRouge = ArrayFromREEMAKER.REErougeAccent;
 		if (ValRemplisRouge == INT16_MAX)
 			ValRemplisRouge = 0;
 		int valRemplisVert = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisvert");
 		if (valRemplisVert == -1)
 			valRemplisVert = ArrayFromREEMAKER.REEvert;
+		if (valRemplisVert == -2)
+			valRemplisVert = ArrayFromREEMAKER.REEvertAccent;
 		if (valRemplisVert == INT16_MAX)
 			valRemplisVert = 0;
 		int valRemplisBleu = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "remplisbleu");
 		if (valRemplisBleu == -1)
 			valRemplisBleu = ArrayFromREEMAKER.REEbleu;
+		if (valRemplisBleu == -2)
+			valRemplisBleu = ArrayFromREEMAKER.REEbleuAccent;
 		if (valRemplisBleu == INT16_MAX)
 			valRemplisBleu = 0;
 		int valAlignementI = RetourneCleInt(vecCommandeList[lArg].mVecCommande, "alignement");
