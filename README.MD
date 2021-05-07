@@ -100,7 +100,6 @@ Utilise les librairies et codes suivants :
     
   * Compacte et répare Command Line
     Logiciel fait par moi même pour compacter et réparer les fichiers PDF.
-    
     Utilise [iText7](https://itextpdf.com/en/products/itext-7/) sous [Licence AGpl](https://github.com/itext/itext7/blob/develop/LICENSE.md)
     
 * [Poppler PDFToPPM](https://poppler.freedesktop.org)
